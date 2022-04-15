@@ -10,7 +10,6 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 .flattened-pom.xml
-.sdkmanrc
 
 
 ### Java template
@@ -84,3 +83,4 @@ crashlytics-build.properties
 .attach_pid*
 .vscode/
 .java-version
+*Dockerfile
