@@ -16,28 +16,29 @@
 
 package org.springframework.cloud.kubernetes.fabric8.config;
 
-import java.util.Base64;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-import io.fabric8.kubernetes.api.model.ConfigMap;
-import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
-import org.springframework.cloud.kubernetes.commons.config.NamespaceResolutionFailedException;
-import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
+import org.springframework.cloud.kubernetes.commons.config.ConfigUtils;
+import org.springframework.cloud.kubernetes.commons.config.MultipleSourcesContainer;
+import org.springframework.cloud.kubernetes.commons.config.StrippedSourceContainer;
+import org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadProperties;
+import org.springframework.cloud.kubernetes.fabric8.Fabric8Utils;
+import org.springframework.core.env.Environment;
 
 /**
  * Utility class that works with configuration properties.
  *
  * @author Ioannis Canellos
  */
-final class Fabric8ConfigUtils {
+public final class Fabric8ConfigUtils {
 
 	private static final Log LOG = LogFactory.getLog(Fabric8ConfigUtils.class);
 
@@ -45,79 +46,107 @@ final class Fabric8ConfigUtils {
 	}
 
 	/**
-	 * this method does the namespace resolution for both config map and secrets
-	 * implementations. It tries these places to find the namespace:
-	 *
-	 * <pre>
-	 *     1. from a normalized source (which can be null)
-	 *     2. from a property 'spring.cloud.kubernetes.client.namespace', if such is present
-	 *     3. from a String residing in a file denoted by `spring.cloud.kubernetes.client.serviceAccountNamespacePath`
-	 * 	      property, if such is present
-	 * 	   4. from a String residing in `/var/run/secrets/kubernetes.io/serviceaccount/namespace` file,
-	 * 	  	  if such is present (kubernetes default path)
-	 * 	   5. from KubernetesClient::getNamespace, which is implementation specific.
-	 * </pre>
-	 *
-	 * If any of the above fail, we throw a NamespaceResolutionFailedException.
-	 * @param namespace normalized namespace
-	 * @param configurationTarget Config Map/Secret
-	 * @param provider the provider which computes the namespace
-	 * @param client fabric8 Kubernetes client
-	 * @return application namespace
-	 * @throws NamespaceResolutionFailedException when namespace could not be resolved
+	 * finds namespaces to be used for the event based reloading.
 	 */
-	static String getApplicationNamespace(KubernetesClient client, String namespace, String configurationTarget,
-			KubernetesNamespaceProvider provider) {
-
-		if (StringUtils.hasText(namespace)) {
-			LOG.debug(configurationTarget + " namespace from normalized source : " + namespace);
-			return namespace;
+	public static Set<String> namespaces(KubernetesClient client, KubernetesNamespaceProvider provider,
+			ConfigReloadProperties properties, String target) {
+		Set<String> namespaces = properties.namespaces();
+		if (namespaces.isEmpty()) {
+			namespaces = Set.of(Fabric8Utils.getApplicationNamespace(client, null, target, provider));
 		}
-
-		if (provider != null) {
-			String providerNamespace = provider.getNamespace();
-			if (StringUtils.hasText(providerNamespace)) {
-				LOG.debug(configurationTarget + " namespace from provider : " + namespace);
-				return providerNamespace;
-			}
-		}
-
-		String clientNamespace = client.getNamespace();
-		LOG.debug(configurationTarget + " namespace from client : " + clientNamespace);
-		if (clientNamespace == null) {
-			throw new NamespaceResolutionFailedException("unresolved namespace");
-		}
-		return clientNamespace;
-
-	}
-
-	/*
-	 * namespace that reaches this point is absolutely present, otherwise this would have
-	 * resulted in a NamespaceResolutionFailedException
-	 */
-	static Map<String, String> getConfigMapData(KubernetesClient client, String namespace, String name) {
-		ConfigMap configMap = client.configMaps().inNamespace(namespace).withName(name).get();
-
-		if (configMap == null) {
-			LOG.warn("config-map with name : '" + name + "' not present in namespace : '" + namespace + "'");
-			return Collections.emptyMap();
-		}
-
-		return configMap.getData();
+		LOG.debug("informer namespaces : " + namespaces);
+		return namespaces;
 	}
 
 	/**
-	 * return decoded data from a secret within a namespace.
+	 * <pre>
+	 *     1. read all secrets in the provided namespace
+	 *     2. from the above, filter the ones that we care about (filter by labels)
+	 *     3. with secret names from (2), find out if there are any profile based secrets (if profiles is not empty)
+	 *     4. concat (2) and (3) and these are the secrets we are interested in
+	 *     5. see if any of the secrets from (4) has a single yaml/properties file
+	 *     6. gather all the names of the secrets (from 4) + data they hold
+	 * </pre>
 	 */
-	static Map<String, Object> dataFromSecret(Secret secret, String namespace) {
-		LOG.debug("reading secret with name : " + secret.getMetadata().getName() + " in namespace : " + namespace);
-		return secretData(secret.getData());
+	static MultipleSourcesContainer secretsDataByLabels(KubernetesClient client, String namespace,
+			Map<String, String> labels, Environment environment, Set<String> profiles) {
+		List<StrippedSourceContainer> strippedSecrets = strippedSecrets(client, namespace);
+		if (strippedSecrets.isEmpty()) {
+			return MultipleSourcesContainer.empty();
+		}
+		return ConfigUtils.processLabeledData(strippedSecrets, environment, labels, namespace, profiles, true);
 	}
 
-	private static Map<String, Object> secretData(Map<String, String> data) {
-		Map<String, Object> result = new HashMap<>(CollectionUtils.newHashMap(data.size()));
-		data.forEach((key, value) -> result.put(key, new String(Base64.getDecoder().decode(value)).trim()));
-		return result;
+	/**
+	 * <pre>
+	 *     1. read all config maps in the provided namespace
+	 *     2. from the above, filter the ones that we care about (filter by labels)
+	 *     3. with config maps names from (2), find out if there are any profile based ones (if profiles is not empty)
+	 *     4. concat (2) and (3) and these are the config maps we are interested in
+	 *     5. see if any from (4) has a single yaml/properties file
+	 *     6. gather all the names of the config maps (from 4) + data they hold
+	 * </pre>
+	 */
+	static MultipleSourcesContainer configMapsDataByLabels(KubernetesClient client, String namespace,
+			Map<String, String> labels, Environment environment, Set<String> profiles) {
+		List<StrippedSourceContainer> strippedConfigMaps = strippedConfigMaps(client, namespace);
+		if (strippedConfigMaps.isEmpty()) {
+			return MultipleSourcesContainer.empty();
+		}
+
+		return ConfigUtils.processLabeledData(strippedConfigMaps, environment, labels, namespace, profiles, false);
+	}
+
+	/**
+	 * <pre>
+	 *     1. read all secrets in the provided namespace
+	 *     2. from the above, filter the ones that we care about (by name)
+	 *     3. see if any of the secrets has a single yaml/properties file
+	 *     4. gather all the names of the secrets + decoded data they hold
+	 * </pre>
+	 */
+	static MultipleSourcesContainer secretsDataByName(KubernetesClient client, String namespace,
+			LinkedHashSet<String> sourceNames, Environment environment) {
+		List<StrippedSourceContainer> strippedSecrets = strippedSecrets(client, namespace);
+		if (strippedSecrets.isEmpty()) {
+			return MultipleSourcesContainer.empty();
+		}
+		return ConfigUtils.processNamedData(strippedSecrets, environment, sourceNames, namespace, true);
+	}
+
+	/**
+	 * <pre>
+	 *     1. read all config maps in the provided namespace
+	 *     2. from the above, filter the ones that we care about (by name)
+	 *     3. see if any of the config maps has a single yaml/properties file
+	 *     4. gather all the names of the config maps + data they hold
+	 * </pre>
+	 */
+	static MultipleSourcesContainer configMapsDataByName(KubernetesClient client, String namespace,
+			LinkedHashSet<String> sourceNames, Environment environment) {
+		List<StrippedSourceContainer> strippedConfigMaps = strippedConfigMaps(client, namespace);
+		if (strippedConfigMaps.isEmpty()) {
+			return MultipleSourcesContainer.empty();
+		}
+		return ConfigUtils.processNamedData(strippedConfigMaps, environment, sourceNames, namespace, false);
+	}
+
+	private static List<StrippedSourceContainer> strippedConfigMaps(KubernetesClient client, String namespace) {
+		List<StrippedSourceContainer> strippedConfigMaps = Fabric8ConfigMapsCache.byNamespace(client, namespace);
+		if (strippedConfigMaps.isEmpty()) {
+			LOG.debug("No configmaps in namespace '" + namespace + "'");
+		}
+
+		return strippedConfigMaps;
+	}
+
+	private static List<StrippedSourceContainer> strippedSecrets(KubernetesClient client, String namespace) {
+		List<StrippedSourceContainer> strippedSecrets = Fabric8SecretsCache.byNamespace(client, namespace);
+		if (strippedSecrets.isEmpty()) {
+			LOG.debug("No secrets in namespace '" + namespace + "'");
+		}
+
+		return strippedSecrets;
 	}
 
 }

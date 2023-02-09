@@ -16,16 +16,18 @@
 
 package org.springframework.cloud.kubernetes.commons.config;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.stream.Collectors;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import java.util.stream.Stream;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
+
+import static org.springframework.cloud.kubernetes.commons.config.ConfigUtils.getApplicationName;
 
 /**
  * Config map configuration properties.
@@ -34,176 +36,82 @@ import org.springframework.util.StringUtils;
  * @author Isik Erhan
  */
 @ConfigurationProperties(ConfigMapConfigProperties.PREFIX)
-public class ConfigMapConfigProperties extends AbstractConfigProperties {
+public record ConfigMapConfigProperties(@DefaultValue("true") boolean enableApi, @DefaultValue List<String> paths,
+		@DefaultValue List<Source> sources, @DefaultValue Map<String, String> labels,
+		@DefaultValue("true") boolean enabled, String name, String namespace, boolean useNameAsPrefix,
+		@DefaultValue("true") boolean includeProfileSpecificSources, boolean failFast,
+		@DefaultValue RetryProperties retry) {
 
 	/**
-	 * Prefix for Kubernetes secrets configuration properties.
+	 * Prefix for Kubernetes config maps configuration properties.
 	 */
 	public static final String PREFIX = "spring.cloud.kubernetes.config";
 
-	private static final Log LOG = LogFactory.getLog(ConfigMapConfigProperties.class);
-
-	private boolean enableApi = true;
-
-	private List<String> paths = Collections.emptyList();
-
-	private List<Source> sources = Collections.emptyList();
-
-	public boolean isEnableApi() {
-		return this.enableApi;
-	}
-
-	public void setEnableApi(boolean enableApi) {
-		this.enableApi = enableApi;
-	}
-
-	public List<String> getPaths() {
-		return this.paths;
-	}
-
-	public void setPaths(List<String> paths) {
-		this.paths = paths;
-	}
-
-	public List<Source> getSources() {
-		return this.sources;
-	}
-
-	public void setSources(List<Source> sources) {
-		this.sources = sources;
-	}
-
 	/**
-	 * @return A list of Source to use. If the user has not specified any Source
-	 * properties, then a single Source is constructed based on the supplied name and
-	 * namespace.
-	 *
-	 * These are the actual name/namespace pairs that are used to create a
-	 * ConfigMapPropertySource.
+	 * @return A list of config map source(s) to use.
 	 */
-	public List<NormalizedSource> determineSources() {
+	public List<NormalizedSource> determineSources(Environment environment) {
 		if (this.sources.isEmpty()) {
-			if (useNameAsPrefix) {
-				LOG.warn(
-						"'spring.cloud.kubernetes.config.useNameAsPrefix' is set to 'true', but 'spring.cloud.kubernetes.config.sources'"
-								+ " is empty; as such will default 'useNameAsPrefix' to 'false'");
+			List<NormalizedSource> result = new ArrayList<>(2);
+			String name = getApplicationName(environment, this.name, "ConfigMap");
+			result.add(new NamedConfigMapNormalizedSource(name, this.namespace, this.failFast,
+					this.includeProfileSpecificSources));
+
+			if (!labels.isEmpty()) {
+				result.add(new LabeledConfigMapNormalizedSource(this.namespace, this.labels, this.failFast,
+						ConfigUtils.Prefix.DEFAULT, false));
 			}
-			return Collections.singletonList(
-					new NamedConfigMapNormalizedSource(name, namespace, failFast, "", includeProfileSpecificSources));
+			return result;
 		}
 
-		return sources.stream()
-				.map(s -> s.normalize(name, namespace, useNameAsPrefix, includeProfileSpecificSources, failFast))
+		return this.sources
+				.stream().flatMap(s -> s.normalize(this.name, this.namespace, this.labels,
+						this.includeProfileSpecificSources, this.failFast, this.useNameAsPrefix, environment))
 				.collect(Collectors.toList());
 	}
 
 	/**
 	 * Config map source.
+	 * @param name The name of the ConfigMap.
+	 * @param namespace The namespace where the ConfigMap is found.
+	 * @param labels labels of the config map to look for against.
+	 * @param explicitPrefix An explicit prefix to be used for properties.
+	 * @param useNameAsPrefix Use config map name as prefix for properties.
+	 * @param includeProfileSpecificSources Use profile name to append to a config map
+	 * name.
 	 */
-	public static class Source {
+	public record Source(String name, String namespace, @DefaultValue Map<String, String> labels, String explicitPrefix,
+			Boolean useNameAsPrefix, Boolean includeProfileSpecificSources) {
 
-		/**
-		 * The name of the ConfigMap.
-		 */
-		private String name;
+		private Stream<NormalizedSource> normalize(String defaultName, String defaultNamespace,
+				Map<String, String> defaultLabels, boolean defaultIncludeProfileSpecificSources, boolean failFast,
+				boolean defaultUseNameAsPrefix, Environment environment) {
 
-		/**
-		 * The namespace where the ConfigMap is found.
-		 */
-		private String namespace;
+			Stream.Builder<NormalizedSource> normalizedSources = Stream.builder();
 
-		/**
-		 * Use config map name as prefix for properties. Can't be a primitive, we need to
-		 * know if it was explicitly set or not
-		 */
-		private Boolean useNameAsPrefix;
-
-		/**
-		 * Use profile name to append to a config map name. Can't be a primitive, we need
-		 * to know if it was explicitly set or not
-		 */
-		protected Boolean includeProfileSpecificSources;
-
-		/**
-		 * An explicit prefix to be used for properties.
-		 */
-		private String explicitPrefix;
-
-		public Source() {
-
-		}
-
-		public String getName() {
-			return this.name;
-		}
-
-		public void setName(String name) {
-			this.name = name;
-		}
-
-		public String getNamespace() {
-			return this.namespace;
-		}
-
-		public void setNamespace(String namespace) {
-			this.namespace = namespace;
-		}
-
-		public Boolean isUseNameAsPrefix() {
-			return useNameAsPrefix;
-		}
-
-		public void setUseNameAsPrefix(Boolean useNameAsPrefix) {
-			this.useNameAsPrefix = useNameAsPrefix;
-		}
-
-		public String getExplicitPrefix() {
-			return explicitPrefix;
-		}
-
-		public void setExplicitPrefix(String explicitPrefix) {
-			this.explicitPrefix = explicitPrefix;
-		}
-
-		public Boolean getIncludeProfileSpecificSources() {
-			return includeProfileSpecificSources;
-		}
-
-		public void setIncludeProfileSpecificSources(Boolean includeProfileSpecificSources) {
-			this.includeProfileSpecificSources = includeProfileSpecificSources;
-		}
-
-		public boolean isEmpty() {
-			return !StringUtils.hasLength(this.name) && !StringUtils.hasLength(this.namespace);
-		}
-
-		private NormalizedSource normalize(String defaultName, String defaultNamespace, boolean defaultUseNameAsPrefix,
-				boolean defaultIncludeProfileSpecificSources, boolean failFast) {
 			String normalizedName = StringUtils.hasLength(this.name) ? this.name : defaultName;
 			String normalizedNamespace = StringUtils.hasLength(this.namespace) ? this.namespace : defaultNamespace;
-			String prefix = ConfigUtils.findPrefix(this.explicitPrefix, useNameAsPrefix, defaultUseNameAsPrefix,
-					normalizedName);
+			Map<String, String> normalizedLabels = this.labels.isEmpty() ? defaultLabels : this.labels;
+
+			String configMapName = getApplicationName(environment, normalizedName, "Config Map");
+
+			ConfigUtils.Prefix prefix = ConfigUtils.findPrefix(this.explicitPrefix, this.useNameAsPrefix,
+					defaultUseNameAsPrefix, normalizedName);
+
 			boolean includeProfileSpecificSources = ConfigUtils.includeProfileSpecificSources(
 					defaultIncludeProfileSpecificSources, this.includeProfileSpecificSources);
-			return new NamedConfigMapNormalizedSource(normalizedName, normalizedNamespace, failFast, prefix,
-					includeProfileSpecificSources);
-		}
+			NormalizedSource namedBasedSource = new NamedConfigMapNormalizedSource(configMapName, normalizedNamespace,
+					failFast, prefix, includeProfileSpecificSources);
+			normalizedSources.add(namedBasedSource);
 
-		@Override
-		public boolean equals(Object o) {
-			if (this == o) {
-				return true;
+			if (!normalizedLabels.isEmpty()) {
+				NormalizedSource labeledBasedSource = new LabeledConfigMapNormalizedSource(normalizedNamespace, labels,
+						failFast, prefix, includeProfileSpecificSources);
+				normalizedSources.add(labeledBasedSource);
 			}
-			if (o == null || getClass() != o.getClass()) {
-				return false;
-			}
-			Source other = (Source) o;
-			return Objects.equals(this.name, other.name) && Objects.equals(this.namespace, other.namespace);
-		}
 
-		@Override
-		public int hashCode() {
-			return Objects.hash(name, namespace);
+			return normalizedSources.build();
+
 		}
 
 	}

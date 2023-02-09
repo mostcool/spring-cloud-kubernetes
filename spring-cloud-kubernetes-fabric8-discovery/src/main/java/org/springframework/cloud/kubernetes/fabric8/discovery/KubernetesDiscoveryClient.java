@@ -34,17 +34,17 @@ import org.apache.commons.logging.LogFactory;
 
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.cloud.kubernetes.commons.discovery.DefaultKubernetesServiceInstance;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
-import org.springframework.cloud.kubernetes.commons.discovery.KubernetesServiceInstance;
-import org.springframework.expression.Expression;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import static java.util.stream.Collectors.toMap;
-import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesServiceInstance.NAMESPACE_METADATA_KEY;
+import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryConstants.HTTP;
+import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryConstants.HTTPS;
+import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryConstants.NAMESPACE_METADATA_KEY;
+import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryConstants.PRIMARY_PORT_NAME_LABEL_KEY;
 
 /**
  * Kubernetes implementation of {@link DiscoveryClient}.
@@ -56,22 +56,13 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 
 	private static final Log log = LogFactory.getLog(KubernetesDiscoveryClient.class);
 
-	private static final String PRIMARY_PORT_NAME_LABEL_KEY = "primary-port-name";
-
-	private static final String HTTPS_PORT_NAME = "https";
-
-	private static final String HTTP_PORT_NAME = "http";
-
 	private final KubernetesDiscoveryProperties properties;
-
-	private final ServicePortSecureResolver servicePortSecureResolver;
 
 	private final KubernetesClientServicesFunction kubernetesClientServicesFunction;
 
-	private final SpelExpressionParser parser = new SpelExpressionParser();
+	private final ServicePortSecureResolver servicePortSecureResolver;
 
-	private final SimpleEvaluationContext evalCtxt = SimpleEvaluationContext.forReadOnlyDataBinding()
-			.withInstanceMethods().build();
+	private final Fabric8DiscoveryServicesAdapter adapter;
 
 	private KubernetesClient client;
 
@@ -79,18 +70,20 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 			KubernetesDiscoveryProperties kubernetesDiscoveryProperties,
 			KubernetesClientServicesFunction kubernetesClientServicesFunction) {
 
-		this(client, kubernetesDiscoveryProperties, kubernetesClientServicesFunction,
+		this(client, kubernetesDiscoveryProperties, kubernetesClientServicesFunction, null,
 				new ServicePortSecureResolver(kubernetesDiscoveryProperties));
 	}
 
 	KubernetesDiscoveryClient(KubernetesClient client, KubernetesDiscoveryProperties kubernetesDiscoveryProperties,
-			KubernetesClientServicesFunction kubernetesClientServicesFunction,
+			KubernetesClientServicesFunction kubernetesClientServicesFunction, Predicate<Service> filter,
 			ServicePortSecureResolver servicePortSecureResolver) {
 
 		this.client = client;
 		this.properties = kubernetesDiscoveryProperties;
-		this.kubernetesClientServicesFunction = kubernetesClientServicesFunction;
 		this.servicePortSecureResolver = servicePortSecureResolver;
+		this.kubernetesClientServicesFunction = kubernetesClientServicesFunction;
+		this.adapter = new Fabric8DiscoveryServicesAdapter(kubernetesClientServicesFunction,
+				kubernetesDiscoveryProperties, filter);
 	}
 
 	public KubernetesClient getClient() {
@@ -124,23 +117,36 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 	}
 
 	public List<Endpoints> getEndPointsList(String serviceId) {
-		return this.properties.isAllNamespaces()
-				? this.client.endpoints().inAnyNamespace().withField("metadata.name", serviceId)
-						.withLabels(properties.getServiceLabels()).list().getItems()
-				: this.client.endpoints().withField("metadata.name", serviceId)
-						.withLabels(properties.getServiceLabels()).list().getItems();
+		if (this.properties.allNamespaces()) {
+			return this.client.endpoints().inAnyNamespace().withField("metadata.name", serviceId)
+					.withLabels(properties.serviceLabels()).list().getItems();
+		}
+		if (properties.namespaces().isEmpty()) {
+			return this.client.endpoints().withField("metadata.name", serviceId).withLabels(properties.serviceLabels())
+					.list().getItems();
+		}
+		return findEndPointsFilteredByNamespaces(serviceId);
+	}
+
+	private List<Endpoints> findEndPointsFilteredByNamespaces(String serviceId) {
+		List<Endpoints> endpoints = new ArrayList<>();
+		for (String ns : properties.namespaces()) {
+			endpoints.addAll(getClient().endpoints().inNamespace(ns).withField("metadata.name", serviceId)
+					.withLabels(properties.serviceLabels()).list().getItems());
+		}
+		return endpoints;
 	}
 
 	private List<ServiceInstance> getNamespaceServiceInstances(EndpointSubsetNS es, String serviceId) {
-		String namespace = es.getNamespace();
-		List<EndpointSubset> subsets = es.getEndpointSubset();
+		String namespace = es.namespace();
+		List<EndpointSubset> subsets = es.endpointSubset();
 		List<ServiceInstance> instances = new ArrayList<>();
 		if (!subsets.isEmpty()) {
 			final Service service = this.client.services().inNamespace(namespace).withName(serviceId).get();
 			final Map<String, String> serviceMetadata = this.getServiceMetadata(service);
-			KubernetesDiscoveryProperties.Metadata metadataProps = this.properties.getMetadata();
+			KubernetesDiscoveryProperties.Metadata metadataProps = this.properties.metadata();
 
-			String primaryPortName = this.properties.getPrimaryPortName();
+			String primaryPortName = this.properties.primaryPortName();
 			Map<String, String> labels = service.getMetadata().getLabels();
 			if (labels != null && labels.containsKey(PRIMARY_PORT_NAME_LABEL_KEY)) {
 				primaryPortName = labels.get(PRIMARY_PORT_NAME_LABEL_KEY);
@@ -150,25 +156,24 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 				// Extend the service metadata map with per-endpoint port information (if
 				// requested)
 				Map<String, String> endpointMetadata = new HashMap<>(serviceMetadata);
-				if (metadataProps.isAddPorts()) {
+				if (metadataProps.addPorts()) {
 					Map<String, String> ports = s.getPorts().stream()
 							.filter(port -> StringUtils.hasText(port.getName()))
 							.collect(toMap(EndpointPort::getName, port -> Integer.toString(port.getPort())));
-					Map<String, String> portMetadata = getMapWithPrefixedKeys(ports, metadataProps.getPortsPrefix());
+					Map<String, String> portMetadata = getMapWithPrefixedKeys(ports, metadataProps.portsPrefix());
 					if (log.isDebugEnabled()) {
 						log.debug("Adding port metadata: " + portMetadata);
 					}
 					endpointMetadata.putAll(portMetadata);
 				}
 
-				if (this.properties.isAllNamespaces()) {
+				if (this.properties.allNamespaces()) {
 					endpointMetadata.put(NAMESPACE_METADATA_KEY, namespace);
 				}
 
 				List<EndpointAddress> addresses = s.getAddresses();
 
-				if (this.properties.isIncludeNotReadyAddresses()
-						&& !CollectionUtils.isEmpty(s.getNotReadyAddresses())) {
+				if (this.properties.includeNotReadyAddresses() && !CollectionUtils.isEmpty(s.getNotReadyAddresses())) {
 					if (addresses == null) {
 						addresses = new ArrayList<>();
 					}
@@ -181,7 +186,7 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 					if (endpointAddress.getTargetRef() != null) {
 						instanceId = endpointAddress.getTargetRef().getUid();
 					}
-					instances.add(new KubernetesServiceInstance(instanceId, serviceId, endpointAddress.getIp(),
+					instances.add(new DefaultKubernetesServiceInstance(instanceId, serviceId, endpointAddress.getIp(),
 							endpointPort, endpointMetadata,
 							this.servicePortSecureResolver.resolve(new ServicePortSecureResolver.Input(endpointPort,
 									service.getMetadata().getName(), service.getMetadata().getLabels(),
@@ -195,18 +200,18 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 
 	private Map<String, String> getServiceMetadata(Service service) {
 		final Map<String, String> serviceMetadata = new HashMap<>();
-		KubernetesDiscoveryProperties.Metadata metadataProps = this.properties.getMetadata();
-		if (metadataProps.isAddLabels()) {
+		KubernetesDiscoveryProperties.Metadata metadataProps = this.properties.metadata();
+		if (metadataProps.addLabels()) {
 			Map<String, String> labelMetadata = getMapWithPrefixedKeys(service.getMetadata().getLabels(),
-					metadataProps.getLabelsPrefix());
+					metadataProps.labelsPrefix());
 			if (log.isDebugEnabled()) {
 				log.debug("Adding label metadata: " + labelMetadata);
 			}
 			serviceMetadata.putAll(labelMetadata);
 		}
-		if (metadataProps.isAddAnnotations()) {
+		if (metadataProps.addAnnotations()) {
 			Map<String, String> annotationMetadata = getMapWithPrefixedKeys(service.getMetadata().getAnnotations(),
-					metadataProps.getAnnotationsPrefix());
+					metadataProps.annotationsPrefix());
 			if (log.isDebugEnabled()) {
 				log.debug("Adding annotation metadata: " + annotationMetadata);
 			}
@@ -231,7 +236,7 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 			// In case no port has been found return -1 to log a warning and fall back to
 			// the first port in the list.
 			int discoveredPort = ports.getOrDefault(primaryPortName,
-					ports.getOrDefault(HTTPS_PORT_NAME, ports.getOrDefault(HTTP_PORT_NAME, -1)));
+					ports.getOrDefault(HTTPS, ports.getOrDefault(HTTP, -1)));
 
 			if (discoveredPort == -1) {
 				if (StringUtils.hasText(primaryPortName)) {
@@ -252,13 +257,10 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 	}
 
 	private EndpointSubsetNS getSubsetsFromEndpoints(Endpoints endpoints) {
-		EndpointSubsetNS es = new EndpointSubsetNS();
-		es.setNamespace(this.client.getNamespace()); // start with the default that comes
-														// with the client
-
+		// start with the default that comes with the client
+		EndpointSubsetNS es = new EndpointSubsetNS(this.client.getNamespace(), null);
 		if (endpoints != null && endpoints.getSubsets() != null) {
-			es.setNamespace(endpoints.getMetadata().getNamespace());
-			es.setEndpointSubset(endpoints.getSubsets());
+			es = new EndpointSubsetNS(endpoints.getMetadata().getNamespace(), endpoints.getSubsets());
 		}
 
 		return es;
@@ -285,32 +287,18 @@ public class KubernetesDiscoveryClient implements DiscoveryClient {
 
 	@Override
 	public List<String> getServices() {
-		String spelExpression = this.properties.getFilter();
-		Predicate<Service> filteredServices;
-		if (spelExpression == null || spelExpression.isEmpty()) {
-			filteredServices = (Service instance) -> true;
-		}
-		else {
-			Expression filterExpr = this.parser.parseExpression(spelExpression);
-			filteredServices = (Service instance) -> {
-				Boolean include = filterExpr.getValue(this.evalCtxt, instance, Boolean.class);
-				if (include == null) {
-					return false;
-				}
-				return include;
-			};
-		}
-		return getServices(filteredServices);
+		return adapter.apply(client).stream().map(s -> s.getMetadata().getName()).toList();
 	}
 
+	@Deprecated(forRemoval = true)
 	public List<String> getServices(Predicate<Service> filter) {
-		return this.kubernetesClientServicesFunction.apply(this.client).list().getItems().stream().filter(filter)
-				.map(s -> s.getMetadata().getName()).collect(Collectors.toList());
+		return new Fabric8DiscoveryServicesAdapter(kubernetesClientServicesFunction, properties, filter).apply(client)
+				.stream().map(s -> s.getMetadata().getName()).toList();
 	}
 
 	@Override
 	public int getOrder() {
-		return this.properties.getOrder();
+		return this.properties.order();
 	}
 
 }

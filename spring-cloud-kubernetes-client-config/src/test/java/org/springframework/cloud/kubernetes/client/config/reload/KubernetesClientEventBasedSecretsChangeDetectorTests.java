@@ -20,8 +20,9 @@ import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -46,7 +47,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import org.springframework.cloud.kubernetes.client.config.KubernetesClientSecretsPropertySource;
 import org.springframework.cloud.kubernetes.client.config.KubernetesClientSecretsPropertySourceLocator;
@@ -63,9 +63,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -107,7 +105,7 @@ class KubernetesClientEventBasedSecretsChangeDetectorTests {
 				.putStringDataItem("password", Base64.getEncoder().encodeToString("p455w0rd2".getBytes()))
 				.putStringDataItem("username", Base64.getEncoder().encodeToString("user".getBytes()));
 		V1SecretList secretList = new V1SecretList().kind("SecretList").metadata(new V1ListMeta().resourceVersion("0"))
-				.items(Arrays.asList(dbPassword));
+				.items(List.of(dbPassword));
 
 		stubFor(get(urlMatching("^/api/v1/namespaces/default/secrets.*")).inScenario("watch")
 				.whenScenarioStateIs(STARTED).withQueryParam("watch", equalTo("false"))
@@ -142,33 +140,37 @@ class KubernetesClientEventBasedSecretsChangeDetectorTests {
 		OkHttpClient httpClient = apiClient.getHttpClient().newBuilder().readTimeout(0, TimeUnit.SECONDS).build();
 		apiClient.setHttpClient(httpClient);
 		CoreV1Api coreV1Api = new CoreV1Api(apiClient);
-		ConfigurationUpdateStrategy strategy = mock(ConfigurationUpdateStrategy.class);
-		when(strategy.getName()).thenReturn("strategy");
+
+		int[] howMany = new int[1];
+		Runnable run = () -> {
+			++howMany[0];
+		};
+		ConfigurationUpdateStrategy strategy = new ConfigurationUpdateStrategy("strategy", run);
+
 		KubernetesMockEnvironment environment = new KubernetesMockEnvironment(
 				mock(KubernetesClientSecretsPropertySource.class)).withProperty("db-password", "p455w0rd");
 		KubernetesClientSecretsPropertySourceLocator locator = mock(KubernetesClientSecretsPropertySourceLocator.class);
 		when(locator.locate(environment))
 				.thenAnswer(ignoreMe -> new MockPropertySource().withProperty("db-password", "p455w0rd2"));
-		ConfigReloadProperties properties = new ConfigReloadProperties();
-		properties.setMonitoringSecrets(true);
+		ConfigReloadProperties properties = new ConfigReloadProperties(false, false, true,
+				ConfigReloadProperties.ReloadStrategy.REFRESH, ConfigReloadProperties.ReloadDetectionMode.EVENT,
+				Duration.ofMillis(15000), Set.of(), false, Duration.ofSeconds(2));
 		KubernetesNamespaceProvider kubernetesNamespaceProvider = mock(KubernetesNamespaceProvider.class);
 		when(kubernetesNamespaceProvider.getNamespace()).thenReturn("default");
 		KubernetesClientEventBasedSecretsChangeDetector changeDetector = new KubernetesClientEventBasedSecretsChangeDetector(
 				coreV1Api, environment, properties, strategy, locator, kubernetesNamespaceProvider);
 
-		Thread controllerThread = new Thread(changeDetector::watch);
+		Thread controllerThread = new Thread(changeDetector::inform);
 		controllerThread.setDaemon(true);
 		controllerThread.start();
 
-		await().timeout(Duration.ofSeconds(300))
-				.until(() -> Mockito.mockingDetails(strategy).getInvocations().size() > 4);
-		verify(strategy, atLeast(3)).reload();
+		await().timeout(Duration.ofSeconds(10)).pollInterval(Duration.ofSeconds(2)).until(() -> howMany[0] >= 4);
 	}
 
 	// This is needed when using JDK17 because GSON uses reflection to construct an
 	// OffsetDateTime but that constructor
 	// is protected.
-	public class GsonOffsetDateTimeAdapter extends TypeAdapter<OffsetDateTime> {
+	public final static class GsonOffsetDateTimeAdapter extends TypeAdapter<OffsetDateTime> {
 
 		@Override
 		public void write(JsonWriter jsonWriter, OffsetDateTime localDateTime) throws IOException {
@@ -176,7 +178,7 @@ class KubernetesClientEventBasedSecretsChangeDetectorTests {
 		}
 
 		@Override
-		public OffsetDateTime read(JsonReader jsonReader) throws IOException {
+		public OffsetDateTime read(JsonReader jsonReader) {
 			return OffsetDateTime.now();
 		}
 

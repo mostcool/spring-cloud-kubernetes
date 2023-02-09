@@ -46,19 +46,18 @@ public class KubernetesBootstrapConfiguration {
 	@Configuration(proxyBeanMethods = false)
 	@EnableRetry(proxyTargetClass = true)
 	@Import(AopAutoConfiguration.class)
-	static class RetryConfiguration {
+	public static class RetryConfiguration {
 
-		private static RetryOperationsInterceptor retryOperationsInterceptor(
-				AbstractConfigProperties.RetryProperties retryProperties) {
-			return RetryInterceptorBuilder.stateless().backOffOptions(retryProperties.getInitialInterval(),
-					retryProperties.getMultiplier(), retryProperties.getMaxInterval())
-					.maxAttempts(retryProperties.getMaxAttempts()).build();
+		public static RetryOperationsInterceptor retryOperationsInterceptor(RetryProperties retryProperties) {
+			return RetryInterceptorBuilder.stateless().backOffOptions(retryProperties.initialInterval(),
+					retryProperties.multiplier(), retryProperties.maxInterval())
+					.maxAttempts(retryProperties.maxAttempts()).build();
 		}
 
 		@Bean
 		@ConditionalOnKubernetesConfigRetryEnabled
 		public RetryOperationsInterceptor kubernetesConfigRetryInterceptor(ConfigMapConfigProperties configProperties) {
-			return retryOperationsInterceptor(configProperties.getRetry());
+			return retryOperationsInterceptor(configProperties.retry());
 		}
 
 		@Bean("kubernetesConfigRetryInterceptor")
@@ -70,7 +69,7 @@ public class KubernetesBootstrapConfiguration {
 		@Bean
 		@ConditionalOnKubernetesSecretsRetryEnabled
 		public RetryOperationsInterceptor kubernetesSecretsRetryInterceptor(SecretsConfigProperties configProperties) {
-			return retryOperationsInterceptor(configProperties.getRetry());
+			return retryOperationsInterceptor(configProperties.retry());
 		}
 
 		@Bean("kubernetesSecretsRetryInterceptor")

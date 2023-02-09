@@ -19,17 +19,18 @@
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		 xmlns="http://maven.apache.org/POM/4.0.0"
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+		 
 	<modelVersion>4.0.0</modelVersion>
 
 	<parent>
 		<groupId>org.springframework.cloud</groupId>
 		<artifactId>spring-cloud-build</artifactId>
-		<version>4.0.0-SNAPSHOT</version>
+		<version>4.0.2-SNAPSHOT</version>
 		<relativePath/>
 	</parent>
 
 	<artifactId>spring-cloud-kubernetes</artifactId>
-	<version>3.0.0-SNAPSHOT</version>
+	<version>3.0.2-SNAPSHOT</version>
 	<packaging>pom</packaging>
 	<name>Spring Cloud Kubernetes</name>
 
@@ -62,28 +63,24 @@
 
 	<properties>
 		<!-- Dependency Versions -->
-		<spring-cloud-commons.version>4.0.0-SNAPSHOT</spring-cloud-commons.version>
-		<spring-cloud-config.version>4.0.0-SNAPSHOT</spring-cloud-config.version>
-		<spring-cloud-bus.version>4.0.0-SNAPSHOT</spring-cloud-bus.version>
-		<spring-cloud-contract.version>4.0.0-SNAPSHOT</spring-cloud-contract.version>
+		<spring-cloud-commons.version>4.0.2-SNAPSHOT</spring-cloud-commons.version>
+		<spring-cloud-config.version>4.0.2-SNAPSHOT</spring-cloud-config.version>
+		<spring-cloud-bus.version>4.0.2-SNAPSHOT</spring-cloud-bus.version>
+		<spring-cloud-contract.version>4.0.2-SNAPSHOT</spring-cloud-contract.version>
 
 		<!-- Maven Plugin Versions -->
 		<maven-compiler-plugin.version>3.5</maven-compiler-plugin.version>
 		<maven-deploy-plugin.version>2.8.2</maven-deploy-plugin.version>
 		<maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
 		<maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
-		<kubernetes.maven.plugin.version>1.6.0</kubernetes.maven.plugin.version>
 		<groovy.version>2.4.12</groovy.version>
 		<restassured.version>3.0.2</restassured.version>
-
-		<excludeITTests>**/*IT.java</excludeITTests>
 
 		<maven-checkstyle-plugin.failsOnError>true</maven-checkstyle-plugin.failsOnError>
 		<maven-checkstyle-plugin.failsOnViolation>true
 		</maven-checkstyle-plugin.failsOnViolation>
 		<maven-checkstyle-plugin.includeTestSourceDirectory>true
 		</maven-checkstyle-plugin.includeTestSourceDirectory>
-		<excludeITTests>**/*IT.java</excludeITTests>
 	</properties>
 
 	<modules>
@@ -151,13 +148,13 @@
 				<scope>import</scope>
 			</dependency>
 
-			<!--<dependency>
+			<dependency>
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-contract-dependencies</artifactId>
 				<version>${spring-cloud-contract.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
-			</dependency>-->
+			</dependency>
 
 			<dependency>
 				<groupId>org.codehaus.groovy</groupId>
@@ -199,14 +196,9 @@
 				<configuration>
 					<parallel>all</parallel>
 					<reuseForks>false</reuseForks>
-					<!-- workaround for https://issues.apache.org/jira/projects/SUREFIRE/issues/SUREFIRE-1633?filter=allopenissues -->
-					<!-- we run tests with mvn -DtestsToRun=.... in the pipeline-->
 					<includes>
 						<include>${testsToRun}</include>
 					</includes>
-					<excludes>
-						<exclude>${excludeITTests}</exclude>
-					</excludes>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -359,16 +351,6 @@
 						<configuration>
 							<parallel>all</parallel>
 							<reuseForks>false</reuseForks>
-							<!-- workaround for https://issues.apache.org/jira/projects/SUREFIRE/issues/SUREFIRE-1633?filter=allopenissues -->
-							<!-- we run tests with mvn -DtestsToRun=.... in the pipeline-->
-							<includes>
-								<include>${testsToRun}</include>
-							</includes>
-							<!-- Sets the VM argument line used when unit tests are run. -->
-							<argLine>${surefireArgLine}</argLine>
-							<excludes>
-								<exclude>${excludeITTests}</exclude>
-							</excludes>
 						</configuration>
 					</plugin>
 				</plugins>

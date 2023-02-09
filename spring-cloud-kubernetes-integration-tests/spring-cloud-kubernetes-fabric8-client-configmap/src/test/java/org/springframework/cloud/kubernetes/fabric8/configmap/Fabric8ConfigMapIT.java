@@ -16,134 +16,101 @@
 
 package org.springframework.cloud.kubernetes.fabric8.configmap;
 
-import java.io.FileInputStream;
+import java.io.InputStream;
 import java.time.Duration;
+import java.util.Objects;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress;
-import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.DefaultKubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.k3s.K3sContainer;
 import reactor.netty.http.client.HttpClient;
 import reactor.util.retry.Retry;
+import reactor.util.retry.RetryBackoffSpec;
 
-import org.springframework.cloud.kubernetes.integration.tests.commons.Fabric8Utils;
-import org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
+import org.springframework.cloud.kubernetes.integration.tests.commons.fabric8_client.Util;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-public class Fabric8ConfigMapIT {
+class Fabric8ConfigMapIT {
+
+	private static final String IMAGE_NAME = "spring-cloud-kubernetes-fabric8-client-configmap";
 
 	private static final String NAMESPACE = "default";
 
 	private static KubernetesClient client;
 
-	private static String deploymentName;
+	private static final K3sContainer K3S = Commons.container();
 
-	private static String serviceName;
-
-	private static String ingressName;
-
-	private static String configMapName;
+	private static Util util;
 
 	@BeforeAll
-	public static void setup() {
-		Config config = Config.autoConfigure(null);
-		client = new DefaultKubernetesClient(config);
-		deployManifests();
+	static void beforeAll() throws Exception {
+		K3S.start();
+		util = new Util(K3S);
+		client = util.client();
+
+		Commons.validateImage(IMAGE_NAME, K3S);
+		Commons.loadSpringCloudKubernetesImage(IMAGE_NAME, K3S);
+
+		util.setUp(NAMESPACE);
+		manifests(Phase.CREATE);
 	}
 
 	@AfterAll
-	public static void after() {
-		deleteManifests();
+	static void afterAll() throws Exception {
+		manifests(Phase.DELETE);
+		Commons.cleanUp(IMAGE_NAME, K3S);
 	}
 
 	@Test
-	public void test() {
-		WebClient client = WebClient.builder().clientConnector(new ReactorClientHttpConnector(HttpClient.create()))
-				.baseUrl("localhost/fabric8-configmap/key1").build();
+	void test() {
+		WebClient client = builder().baseUrl("localhost/key1").build();
 
-		String result = client.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
-				.retryWhen(Retry.fixedDelay(15, Duration.ofSeconds(1))
-						.filter(x -> ((WebClientResponseException) x).getStatusCode().value() == 503))
+		String result = client.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
 				.block();
 
 		Assertions.assertEquals("value1", result);
 	}
 
-	private static void deleteManifests() {
+	private static void manifests(Phase phase) {
 
-		try {
+		InputStream deploymentStream = util.inputStream("fabric8-deployment.yaml");
+		InputStream serviceStream = util.inputStream("fabric8-service.yaml");
+		InputStream ingressStream = util.inputStream("fabric8-ingress.yaml");
+		InputStream configMapStream = util.inputStream("fabric8-configmap.yaml");
 
-			client.configMaps().inNamespace(NAMESPACE).withName(configMapName).delete();
-			client.apps().deployments().inNamespace(NAMESPACE).withName(deploymentName).delete();
-			client.services().inNamespace(NAMESPACE).withName(serviceName).delete();
-			client.network().v1().ingresses().inNamespace(NAMESPACE).withName(ingressName).delete();
+		Deployment deployment = client.apps().deployments().load(deploymentStream).get();
+		Service service = client.services().load(serviceStream).get();
+		Ingress ingress = client.network().v1().ingresses().load(ingressStream).get();
+		ConfigMap configMap = client.configMaps().load(configMapStream).get();
 
+		if (phase.equals(Phase.CREATE)) {
+			util.createAndWait(NAMESPACE, configMap, null);
+			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
 		}
-		catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-
-	}
-
-	private static void deployManifests() {
-
-		try {
-
-			ConfigMap configMap = client.configMaps().load(getConfigMap()).get();
-			configMapName = configMap.getMetadata().getName();
-			client.configMaps().create(configMap);
-
-			Deployment deployment = client.apps().deployments().load(getDeployment()).get();
-
-			String version = K8SUtils.getPomVersion();
-			String currentImage = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage();
-			deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(currentImage + ":" + version);
-
-			client.apps().deployments().inNamespace(NAMESPACE).create(deployment);
-			deploymentName = deployment.getMetadata().getName();
-
-			Service service = client.services().load(getService()).get();
-			serviceName = service.getMetadata().getName();
-			client.services().inNamespace(NAMESPACE).create(service);
-
-			Ingress ingress = client.network().v1().ingresses().load(getIngress()).get();
-			ingressName = ingress.getMetadata().getName();
-			client.network().v1().ingresses().inNamespace(NAMESPACE).create(ingress);
-
-			Fabric8Utils.waitForDeployment(client, "spring-cloud-kubernetes-fabric8-client-configmap-deployment",
-					NAMESPACE, 2, 600);
-
-		}
-		catch (Exception e) {
-			throw new RuntimeException(e);
+		else {
+			util.deleteAndWait(NAMESPACE, configMap, null);
+			util.deleteAndWait(NAMESPACE, deployment, service, ingress);
 		}
 
 	}
 
-	private static FileInputStream getService() throws Exception {
-		return Fabric8Utils.inputStream("fabric8-service.yaml");
+	private WebClient.Builder builder() {
+		return WebClient.builder().clientConnector(new ReactorClientHttpConnector(HttpClient.create()));
 	}
 
-	private static FileInputStream getDeployment() throws Exception {
-		return Fabric8Utils.inputStream("fabric8-deployment.yaml");
-	}
-
-	private static FileInputStream getIngress() throws Exception {
-		return Fabric8Utils.inputStream("fabric8-ingress.yaml");
-	}
-
-	private static FileInputStream getConfigMap() throws Exception {
-		return Fabric8Utils.inputStream("fabric8-configmap.yaml");
+	private RetryBackoffSpec retrySpec() {
+		return Retry.fixedDelay(15, Duration.ofSeconds(1)).filter(Objects::nonNull);
 	}
 
 }

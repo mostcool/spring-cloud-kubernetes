@@ -16,203 +16,172 @@
 
 package org.springframework.cloud.kubernetes.client.config.it;
 
-import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
-import io.kubernetes.client.openapi.ApiClient;
-import io.kubernetes.client.openapi.apis.AppsV1Api;
+import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
-import io.kubernetes.client.openapi.apis.NetworkingV1Api;
 import io.kubernetes.client.openapi.models.V1ConfigMap;
 import io.kubernetes.client.openapi.models.V1Deployment;
+import io.kubernetes.client.openapi.models.V1EnvVar;
+import io.kubernetes.client.openapi.models.V1EnvVarBuilder;
 import io.kubernetes.client.openapi.models.V1Ingress;
 import io.kubernetes.client.openapi.models.V1Secret;
 import io.kubernetes.client.openapi.models.V1Service;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.k3s.K3sContainer;
+import reactor.netty.http.client.HttpClient;
+import reactor.util.retry.Retry;
+import reactor.util.retry.RetryBackoffSpec;
 
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils;
-import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.web.client.ResponseErrorHandler;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
+import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.WebClient;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils.createApiClient;
-import static org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils.getPomVersion;
 
 /**
  * @author Ryan Baxter
  */
-public class ConfigMapAndSecretIT {
+class ConfigMapAndSecretIT {
 
-	private static final Log LOG = LogFactory.getLog(ConfigMapAndSecretIT.class);
+	private static final String PROPERTY_URL = "localhost:80/myProperty";
 
-	private static final String SPRING_CLOUD_CLIENT_CONFIG_IT_DEPLOYMENT_NAME = "spring-cloud-kubernetes-client-config-it-deployment";
-
-	private static final String K8S_CONFIG_CLIENT_IT_NAME = "spring-cloud-kubernetes-client-config-it-deployment";
+	private static final String SECRET_URL = "localhost:80/mySecret";
 
 	private static final String K8S_CONFIG_CLIENT_IT_SERVICE_NAME = "spring-cloud-kubernetes-client-config-it";
 
 	private static final String NAMESPACE = "default";
 
-	private static final String MYPROPERTY_URL = "http://localhost:80/client-config-it/myProperty";
-
-	private static final String MYSECRET_URL = "http://localhost:80/client-config-it/mySecret";
-
 	private static final String APP_NAME = "spring-cloud-kubernetes-client-config-it";
 
-	// though not obvious, we need this, even if it is "unused"
-	private static ApiClient client;
+	private static final K3sContainer K3S = Commons.container();
 
-	private static CoreV1Api api;
+	private static Util util;
 
-	private static AppsV1Api appsApi;
-
-	private static NetworkingV1Api networkingApi;
-
-	private static K8SUtils k8SUtils;
+	private static CoreV1Api coreV1Api;
 
 	@BeforeAll
-	public static void setup() throws Exception {
-		client = createApiClient();
-		api = new CoreV1Api();
-		appsApi = new AppsV1Api();
-		networkingApi = new NetworkingV1Api();
-		k8SUtils = new K8SUtils(api, appsApi);
+	static void setup() throws Exception {
+		K3S.start();
+		Commons.validateImage(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, K3S);
+		Commons.loadSpringCloudKubernetesImage(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, K3S);
+		util = new Util(K3S);
+		coreV1Api = new CoreV1Api();
+		util.setUp(NAMESPACE);
+	}
+
+	@AfterAll
+	static void afterAll() throws Exception {
+		Commons.cleanUp(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, K3S);
 	}
 
 	@AfterEach
-	public void after() throws Exception {
-		appsApi.deleteCollectionNamespacedDeployment(NAMESPACE, null, null, null,
-				"metadata.name=" + K8S_CONFIG_CLIENT_IT_NAME, null, null, null, null, null, null, null, null, null);
-		api.deleteNamespacedService(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, NAMESPACE, null, null, null, null, null, null);
-		networkingApi.deleteNamespacedIngress("it-ingress", NAMESPACE, null, null, null, null, null, null);
-		api.deleteNamespacedConfigMap(APP_NAME, NAMESPACE, null, null, null, null, null, null);
-		api.deleteNamespacedSecret(APP_NAME, NAMESPACE, null, null, null, null, null, null);
+	void after() {
+		configK8sClientIt(false, Phase.DELETE);
 	}
 
-	public void testConfigMapAndSecretRefresh() throws Exception {
+	@Test
+	void testConfigMapAndSecretWatchRefresh() {
+		configK8sClientIt(false, Phase.CREATE);
+		testConfigMapAndSecretRefresh();
+	}
 
-		RestTemplate rest = new RestTemplateBuilder().build();
-		rest.setErrorHandler(new ResponseErrorHandler() {
-			@Override
-			public boolean hasError(ClientHttpResponse clientHttpResponse) throws IOException {
-				LOG.warn("Received response status code: " + clientHttpResponse.getRawStatusCode());
-				return clientHttpResponse.getRawStatusCode() != 503;
-			}
+	@Test
+	void testConfigMapAndSecretPollingRefresh() {
+		configK8sClientIt(true, Phase.CREATE);
+		testConfigMapAndSecretRefresh();
+	}
 
-			@Override
-			public void handleError(ClientHttpResponse clientHttpResponse) {
+	/**
+	 * <pre>
+	 *     - read configmap/secrets the way we initially build them and assert their values
+	 *     - replace the above and assert we get the new values.
+	 * </pre>
+	 */
+	void testConfigMapAndSecretRefresh() {
 
-			}
-		});
+		WebClient.Builder builder = builder();
+		WebClient propertyClient = builder.baseUrl(PROPERTY_URL).build();
 
-		// Sometimes the NGINX ingress takes a bit to catch up and realize the service is
-		// available and we get a 503, we just need to wait a bit
-		await().timeout(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(2))
-				.until(() -> rest.getForEntity(MYPROPERTY_URL, String.class).getStatusCode().is2xxSuccessful());
+		await().timeout(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(2)).until(() -> propertyClient
+				.method(HttpMethod.GET).retrieve().bodyToMono(String.class).block().equals("from-config-map"));
 
-		String myProperty = rest.getForObject(MYPROPERTY_URL, String.class);
-		assertThat(myProperty).isEqualTo("from-config-map");
-		String mySecret = rest.getForObject(MYSECRET_URL, String.class);
-		assertThat(mySecret).isEqualTo("p455w0rd");
+		WebClient secretClient = builder.baseUrl(SECRET_URL).build();
+		String secret = secretClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
+				.block();
+		Assertions.assertEquals(secret, "p455w0rd");
 
-		V1ConfigMap configMap = getConfigK8sClientItConfigMap();
+		V1ConfigMap configMap = (V1ConfigMap) util.yaml("spring-cloud-kubernetes-client-config-it-configmap.yaml");
 		Map<String, String> data = configMap.getData();
 		data.replace("application.yaml", data.get("application.yaml").replace("from-config-map", "from-unit-test"));
 		configMap.data(data);
-		api.replaceNamespacedConfigMap(APP_NAME, NAMESPACE, configMap, null, null, null);
-		await().timeout(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(2))
-				.until(() -> rest.getForObject(MYPROPERTY_URL, String.class).equals("from-unit-test"));
-		myProperty = rest.getForObject(MYPROPERTY_URL, String.class);
-		assertThat(myProperty).isEqualTo("from-unit-test");
-
-		V1Secret secret = getConfigK8sClientItCSecret();
-		Map<String, byte[]> secretData = secret.getData();
+		try {
+			coreV1Api.replaceNamespacedConfigMap(APP_NAME, NAMESPACE, configMap, null, null, null, null);
+		}
+		catch (ApiException e) {
+			throw new RuntimeException(e);
+		}
+		await().timeout(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(2)).until(() -> propertyClient
+				.method(HttpMethod.GET).retrieve().bodyToMono(String.class).block().equals("from-unit-test"));
+		V1Secret v1Secret = (V1Secret) util.yaml("spring-cloud-kubernetes-client-config-it-secret.yaml");
+		Map<String, byte[]> secretData = v1Secret.getData();
 		secretData.replace("my.config.mySecret", "p455w1rd".getBytes());
-		secret.setData(secretData);
-		api.replaceNamespacedSecret(APP_NAME, NAMESPACE, secret, null, null, null);
-		await().timeout(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(2))
-				.until(() -> rest.getForObject(MYSECRET_URL, String.class).equals("p455w1rd"));
-		mySecret = rest.getForObject(MYSECRET_URL, String.class);
-		assertThat(mySecret).isEqualTo("p455w1rd");
-
+		v1Secret.setData(secretData);
+		try {
+			coreV1Api.replaceNamespacedSecret(APP_NAME, NAMESPACE, v1Secret, null, null, null, null);
+		}
+		catch (ApiException e) {
+			throw new RuntimeException(e);
+		}
+		await().timeout(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(2)).until(() -> secretClient
+				.method(HttpMethod.GET).retrieve().bodyToMono(String.class).block().equals("p455w1rd"));
 	}
 
-	@Test
-	public void testConfigMapAndSecretWatchRefresh() throws Exception {
-		deployConfigK8sClientIt();
+	private static void configK8sClientIt(boolean pooling, Phase phase) {
+		V1Deployment deployment = (V1Deployment) util.yaml("spring-cloud-kubernetes-client-config-it-deployment.yaml");
 
-		// Check to make sure the controller deployment is ready
-		k8SUtils.waitForDeployment(SPRING_CLOUD_CLIENT_CONFIG_IT_DEPLOYMENT_NAME, NAMESPACE);
-		testConfigMapAndSecretRefresh();
+		if (pooling) {
+			V1EnvVar one = new V1EnvVarBuilder().withName("SPRING_CLOUD_KUBERNETES_RELOAD_MODE").withValue("polling")
+					.build();
+			List<V1EnvVar> existing = new ArrayList<>(
+					deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv());
+			existing.add(one);
+			deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setEnv(existing);
+		}
+
+		V1Service service = (V1Service) util.yaml("spring-cloud-kubernetes-client-config-it-service.yaml");
+		V1Ingress ingress = (V1Ingress) util.yaml("spring-cloud-kubernetes-client-config-it-ingress.yaml");
+
+		V1ConfigMap configMap = (V1ConfigMap) util.yaml("spring-cloud-kubernetes-client-config-it-configmap.yaml");
+		V1Secret secret = (V1Secret) util.yaml("spring-cloud-kubernetes-client-config-it-secret.yaml");
+
+		if (phase.equals(Phase.CREATE)) {
+			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
+			util.createAndWait(NAMESPACE, configMap, secret);
+		}
+		else if (phase.equals(Phase.DELETE)) {
+			util.deleteAndWait(NAMESPACE, deployment, service, ingress);
+			util.deleteAndWait(NAMESPACE, configMap, secret);
+		}
 	}
 
-	@Test
-	public void testConfigMapAndSecretPollingRefresh() throws Exception {
-		deployConfigK8sClientPollingIt();
-
-		// Check to make sure the controller deployment is ready
-		k8SUtils.waitForDeployment(SPRING_CLOUD_CLIENT_CONFIG_IT_DEPLOYMENT_NAME, NAMESPACE);
-		testConfigMapAndSecretRefresh();
+	private WebClient.Builder builder() {
+		return WebClient.builder().clientConnector(new ReactorClientHttpConnector(HttpClient.create()));
 	}
 
-	private static void deployConfigK8sClientIt() throws Exception {
-		k8SUtils.waitForDeploymentToBeDeleted(K8S_CONFIG_CLIENT_IT_NAME, NAMESPACE);
-		api.createNamespacedSecret(NAMESPACE, getConfigK8sClientItCSecret(), null, null, null);
-		api.createNamespacedConfigMap(NAMESPACE, getConfigK8sClientItConfigMap(), null, null, null);
-		appsApi.createNamespacedDeployment(NAMESPACE, getConfigK8sClientItDeployment(), null, null, null);
-		api.createNamespacedService(NAMESPACE, getConfigK8sClientItService(), null, null, null);
-		networkingApi.createNamespacedIngress(NAMESPACE, getConfigK8sClientItIngress(), null, null, null);
-	}
-
-	private static void deployConfigK8sClientPollingIt() throws Exception {
-		k8SUtils.waitForDeploymentToBeDeleted(K8S_CONFIG_CLIENT_IT_NAME, NAMESPACE);
-		api.createNamespacedSecret(NAMESPACE, getConfigK8sClientItCSecret(), null, null, null);
-		api.createNamespacedConfigMap(NAMESPACE, getConfigK8sClientItConfigMap(), null, null, null);
-		appsApi.createNamespacedDeployment(NAMESPACE, getConfigK8sClientItPollingDeployment(), null, null, null);
-		api.createNamespacedService(NAMESPACE, getConfigK8sClientItService(), null, null, null);
-		networkingApi.createNamespacedIngress(NAMESPACE, getConfigK8sClientItIngress(), null, null, null);
-	}
-
-	private static V1Deployment getConfigK8sClientItDeployment() throws Exception {
-		V1Deployment deployment = (V1Deployment) K8SUtils
-				.readYamlFromClasspath("spring-cloud-kubernetes-client-config-it-deployment.yaml");
-		String image = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage() + ":"
-				+ getPomVersion();
-		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(image);
-		return deployment;
-	}
-
-	private static V1Deployment getConfigK8sClientItPollingDeployment() throws Exception {
-		V1Deployment deployment = (V1Deployment) K8SUtils
-				.readYamlFromClasspath("spring-cloud-kubernetes-client-config-it-polling-deployment.yaml");
-		String image = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage() + ":"
-				+ getPomVersion();
-		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(image);
-		return deployment;
-	}
-
-	private static V1Service getConfigK8sClientItService() throws Exception {
-		return (V1Service) K8SUtils.readYamlFromClasspath("spring-cloud-kubernetes-client-config-it-service.yaml");
-	}
-
-	private static V1Ingress getConfigK8sClientItIngress() throws Exception {
-		return (V1Ingress) K8SUtils.readYamlFromClasspath("spring-cloud-kubernetes-client-config-it-ingress.yaml");
-	}
-
-	private static V1ConfigMap getConfigK8sClientItConfigMap() throws Exception {
-		return (V1ConfigMap) K8SUtils.readYamlFromClasspath("spring-cloud-kubernetes-client-config-it-configmap.yaml");
-	}
-
-	private static V1Secret getConfigK8sClientItCSecret() throws Exception {
-		return (V1Secret) K8SUtils.readYamlFromClasspath("spring-cloud-kubernetes-client-config-it-secret.yaml");
+	private RetryBackoffSpec retrySpec() {
+		return Retry.fixedDelay(15, Duration.ofSeconds(1)).filter(Objects::nonNull);
 	}
 
 }

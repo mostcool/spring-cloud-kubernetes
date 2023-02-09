@@ -56,10 +56,23 @@ public abstract class SecretsPropertySourceLocator implements PropertySourceLoca
 
 	private static final Log LOG = LogFactory.getLog(SecretsPropertySourceLocator.class);
 
+	private final SecretsCache cache;
+
 	protected final SecretsConfigProperties properties;
 
+	/**
+	 * This constructor is deprecated, and we do not use it anymore internally. It will be
+	 * removed in the next major release.
+	 */
+	@Deprecated(forRemoval = true)
 	public SecretsPropertySourceLocator(SecretsConfigProperties properties) {
 		this.properties = properties;
+		this.cache = new SecretsCache.NOOPCache();
+	}
+
+	public SecretsPropertySourceLocator(SecretsConfigProperties properties, SecretsCache cache) {
+		this.properties = properties;
+		this.cache = cache;
 	}
 
 	@Override
@@ -73,10 +86,11 @@ public abstract class SecretsPropertySourceLocator implements PropertySourceLoca
 			// read for secrets mount
 			putPathConfig(composite);
 
-			if (this.properties.isEnableApi()) {
+			if (this.properties.enableApi()) {
 				uniqueSources.forEach(s -> composite.addPropertySource(getMapPropertySourceForSingleSecret(env, s)));
 			}
 
+			cache.discardAll();
 			return composite;
 		}
 		return null;
@@ -98,7 +112,7 @@ public abstract class SecretsPropertySourceLocator implements PropertySourceLoca
 
 	protected void putPathConfig(CompositePropertySource composite) {
 
-		this.properties.getPaths().stream().map(Paths::get).filter(Files::exists).flatMap(x -> {
+		this.properties.paths().stream().map(Paths::get).filter(Files::exists).flatMap(x -> {
 			try {
 				return Files.walk(x);
 			}

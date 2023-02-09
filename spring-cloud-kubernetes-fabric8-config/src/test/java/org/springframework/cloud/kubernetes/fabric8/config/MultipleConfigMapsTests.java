@@ -23,7 +23,6 @@ import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -42,15 +41,12 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 		properties = { "spring.cloud.bootstrap.name=multiplecms", "spring.main.cloud-platform=KUBERNETES" })
 @AutoConfigureWebTestClient
 @EnableKubernetesMockClient(crud = true, https = false)
-public class MultipleConfigMapsTests {
-
-	private static KubernetesClient mockClient;
+abstract class MultipleConfigMapsTests {
 
 	@Autowired
 	private WebTestClient webClient;
 
-	@BeforeAll
-	public static void setUpBeforeClass() {
+	public static void setUpBeforeClass(KubernetesClient mockClient) {
 
 		// Configure the kubernetes master url to point to the mock server
 		System.setProperty(Config.KUBERNETES_MASTER_SYSTEM_PROPERTY, mockClient.getConfiguration().getMasterUrl());
@@ -82,8 +78,9 @@ public class MultipleConfigMapsTests {
 	private static void createConfigmap(KubernetesClient client, String configMapName, String namespace,
 			Map<String, String> data) {
 
-		client.configMaps().inNamespace(namespace).create(
-				new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata().addToData(data).build());
+		client.configMaps().inNamespace(namespace).resource(
+				new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata().addToData(data).build())
+				.create();
 	}
 
 	// the last configmap defined in 'multiplecms.yml' has the highest priority, so

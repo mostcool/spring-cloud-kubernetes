@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 the original author or authors.
+ * Copyright 2013-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,10 @@ import org.springframework.core.env.MapPropertySource;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.PeriodicTrigger;
 
+import static org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadUtil.changed;
+import static org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadUtil.findPropertySources;
+import static org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadUtil.locateMapPropertySources;
+
 /**
  * A change detector that periodically retrieves configmaps and fire a reload when
  * something changes.
@@ -41,40 +45,42 @@ public class PollingConfigMapChangeDetector extends ConfigurationChangeDetector 
 
 	protected Log log = LogFactory.getLog(getClass());
 
-	private PropertySourceLocator propertySourceLocator;
+	private final PropertySourceLocator propertySourceLocator;
 
-	private Class propertySourceClass;
+	private final Class<? extends MapPropertySource> propertySourceClass;
 
-	private TaskScheduler taskExecutor;
+	private final TaskScheduler taskExecutor;
 
-	private Duration period = Duration.ofMillis(1500);
+	private final long period;
+
+	private final boolean monitorConfigMaps;
 
 	public PollingConfigMapChangeDetector(AbstractEnvironment environment, ConfigReloadProperties properties,
-			ConfigurationUpdateStrategy strategy, Class propertySourceClass,
+			ConfigurationUpdateStrategy strategy, Class<? extends MapPropertySource> propertySourceClass,
 			PropertySourceLocator propertySourceLocator, TaskScheduler taskExecutor) {
 		super(environment, properties, strategy);
 		this.propertySourceLocator = propertySourceLocator;
 		this.propertySourceClass = propertySourceClass;
 		this.taskExecutor = taskExecutor;
-		this.period = properties.getPeriod();
+		this.period = properties.period().toMillis();
+		this.monitorConfigMaps = properties.monitoringConfigMaps();
 	}
 
 	@PostConstruct
-	public void init() {
-		this.log.info("Kubernetes polling configMap change detector activated");
-		PeriodicTrigger trigger = new PeriodicTrigger(period.toMillis());
-		trigger.setInitialDelay(period.toMillis());
+	private void init() {
+		log.info("Kubernetes polling configMap change detector activated");
+		PeriodicTrigger trigger = new PeriodicTrigger(Duration.ofMillis(period));
+		trigger.setInitialDelay(Duration.ofMillis(period));
 		taskExecutor.schedule(this::executeCycle, trigger);
 	}
 
-	public void executeCycle() {
+	private void executeCycle() {
 
 		boolean changedConfigMap = false;
-		if (this.properties.isMonitoringConfigMaps()) {
-			if (log.isDebugEnabled()) {
-				log.debug("Polling for changes in config maps");
-			}
-			List<? extends MapPropertySource> currentConfigMapSources = findPropertySources(propertySourceClass);
+		if (monitorConfigMaps) {
+			log.debug("Polling for changes in config maps");
+			List<? extends MapPropertySource> currentConfigMapSources = findPropertySources(propertySourceClass,
+					environment);
 
 			if (!currentConfigMapSources.isEmpty()) {
 				changedConfigMap = changed(locateMapPropertySources(this.propertySourceLocator, this.environment),
@@ -83,7 +89,7 @@ public class PollingConfigMapChangeDetector extends ConfigurationChangeDetector 
 		}
 
 		if (changedConfigMap) {
-			this.log.info("Detected change in config maps");
+			log.info("Detected change in config maps");
 			reloadProperties();
 		}
 	}

@@ -27,10 +27,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.cloud.kubernetes.client.KubernetesClientUtils;
 import org.springframework.cloud.kubernetes.client.config.KubernetesClientSecretsPropertySourceLocator;
 import org.springframework.context.ApplicationContext;
@@ -44,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -51,10 +52,10 @@ import static org.mockito.Mockito.verify;
  * @author Isik Erhan
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
-		properties = { "spring.cloud.kubernetes.client.namespace=default",
-				"spring.cloud.kubernetes.secrets.fail-fast=true", "spring.cloud.kubernetes.secrets.retry.enabled=false",
-				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enable-api=true",
-				"spring.main.cloud-platform=KUBERNETES" },
+		properties = { "spring.cloud.kubernetes.secrets.fail-fast=true",
+				"spring.cloud.kubernetes.secrets.retry.enabled=false", "spring.cloud.kubernetes.secrets.name=my-secret",
+				"spring.cloud.kubernetes.secrets.enable-api=true", "spring.main.cloud-platform=KUBERNETES",
+				"spring.config.import=kubernetes:" },
 		classes = Application.class)
 class SecretsFailFastEnabledButRetryDisabled {
 
@@ -75,6 +76,9 @@ class SecretsFailFastEnabledButRetryDisabled {
 		clientUtilsMock = mockStatic(KubernetesClientUtils.class);
 		clientUtilsMock.when(KubernetesClientUtils::kubernetesApiClient)
 				.thenReturn(new ClientBuilder().setBasePath(wireMockServer.baseUrl()).build());
+		clientUtilsMock
+				.when(() -> KubernetesClientUtils.getApplicationNamespace(Mockito.any(), Mockito.any(), Mockito.any()))
+				.thenReturn("default");
 		stubConfigMapAndSecretsDefaults();
 	}
 
@@ -97,21 +101,20 @@ class SecretsFailFastEnabledButRetryDisabled {
 		stubConfigMapAndSecretsDefaults();
 	}
 
-	@SpyBean
-	private KubernetesClientSecretsPropertySourceLocator propertySourceLocator;
+	@Autowired
+	private KubernetesClientSecretsPropertySourceLocator psl;
 
 	@Autowired
 	private ApplicationContext context;
 
 	@Test
 	void locateShouldFailWithoutRetrying() {
-
+		KubernetesClientSecretsPropertySourceLocator propertySourceLocator = spy(psl);
 		stubFor(get(API).willReturn(aResponse().withStatus(500).withBody("Internal Server Error")));
 
 		assertThat(context.containsBean("kubernetesSecretsRetryInterceptor")).isFalse();
 		assertThatThrownBy(() -> propertySourceLocator.locate(new MockEnvironment()))
-				.isInstanceOf(IllegalStateException.class)
-				.hasMessage("Unable to read Secret with name 'my-secret' in namespace 'default'");
+				.isInstanceOf(IllegalStateException.class).hasMessage("Internal Server Error");
 
 		// verify that propertySourceLocator.locate is called only once
 		verify(propertySourceLocator, times(1)).locate(any());

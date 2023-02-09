@@ -16,128 +16,134 @@
 
 package org.springframework.cloud.kubernetes.fabric8.istio;
 
-import java.io.FileInputStream;
+import java.io.File;
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress;
-import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.DefaultKubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.k3s.K3sContainer;
 import reactor.netty.http.client.HttpClient;
 import reactor.util.retry.Retry;
+import reactor.util.retry.RetryBackoffSpec;
 
-import org.springframework.cloud.kubernetes.integration.tests.commons.Fabric8Utils;
-import org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
+import org.springframework.cloud.kubernetes.integration.tests.commons.fabric8_client.Util;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
+
+import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.processExecResult;
 
 /**
  * @author wind57
  */
-public class Fabric8IstioIT {
+class Fabric8IstioIT {
 
 	private static final String NAMESPACE = "istio-test";
 
+	private static final String IMAGE_NAME = "spring-cloud-kubernetes-fabric8-istio-it";
+
+	private static final String ISTIO_PROXY = "istio/proxyv2";
+
+	private static final String ISTIO_PILOT = "istio/pilot";
+
+	private static final String ISTIO_VERSION = "1.16.0";
+
+	private static final String LOCAL_ISTIO_BIN_PATH = "../../istio-cli/istio-" + ISTIO_VERSION + "/bin";
+
+	private static final String CONTAINER_ISTIO_BIN_PATH = "/tmp/istio/istio-bin/bin/";
+
 	private static KubernetesClient client;
 
-	private static String deploymentName;
+	private static Util util;
 
-	private static String serviceName;
-
-	private static String ingressName;
+	private static K3sContainer K3S;
 
 	@BeforeAll
-	public static void setup() {
-		Config config = Config.autoConfigure(null);
-		client = new DefaultKubernetesClient(config);
-		deployManifests();
+	static void beforeAll() throws Exception {
+		// Path passed to K3S container must be absolute
+		String absolutePath = new File(LOCAL_ISTIO_BIN_PATH).getAbsolutePath();
+		K3S = Commons.container().withFileSystemBind(absolutePath, CONTAINER_ISTIO_BIN_PATH);
+		K3S.start();
+		util = new Util(K3S);
+		client = util.client();
+		Commons.validateImage(IMAGE_NAME, K3S);
+		Commons.loadSpringCloudKubernetesImage(IMAGE_NAME, K3S);
+
+		Commons.pullImage(ISTIO_PROXY, ISTIO_VERSION, K3S);
+		Commons.loadImage(ISTIO_PROXY, ISTIO_VERSION, "istioproxy", K3S);
+		Commons.pullImage(ISTIO_PILOT, ISTIO_VERSION, K3S);
+		Commons.loadImage(ISTIO_PILOT, ISTIO_VERSION, "istiopilot", K3S);
+
+		processExecResult(K3S.execInContainer("sh", "-c", "kubectl create namespace istio-test"));
+		processExecResult(
+				K3S.execInContainer("sh", "-c", "kubectl label namespace istio-test istio-injection=enabled"));
+
+		processExecResult(K3S.execInContainer("sh", "-c", CONTAINER_ISTIO_BIN_PATH + "istioctl"
+				+ " --kubeconfig=/etc/rancher/k3s/k3s.yaml install --set profile=minimal -y"));
+
+		util.setUpIstio(NAMESPACE);
+
+		manifests(Phase.CREATE);
 	}
 
 	@AfterAll
-	public static void after() {
-		deleteManifests();
+	static void afterAll() throws Exception {
+		Commons.cleanUp(IMAGE_NAME, K3S);
+	}
+
+	@AfterAll
+	static void after() {
+		manifests(Phase.DELETE);
 	}
 
 	@Test
-	public void test() {
-		WebClient client = WebClient.builder().clientConnector(new ReactorClientHttpConnector(HttpClient.create()))
-				.baseUrl("localhost/fabric8-client-istio/profiles").build();
+	void test() {
+		WebClient client = builder().baseUrl("localhost/profiles").build();
 
 		@SuppressWarnings("unchecked")
-		List<String> result = client.method(HttpMethod.GET).retrieve().bodyToMono(List.class)
-				.retryWhen(Retry.fixedDelay(15, Duration.ofSeconds(1))
-						.filter(x -> ((WebClientResponseException) x).getStatusCode().value() == 503))
+		List<String> result = client.method(HttpMethod.GET).retrieve().bodyToMono(List.class).retryWhen(retrySpec())
 				.block();
 
 		// istio profile is present
 		Assertions.assertTrue(result.contains("istio"));
 	}
 
-	private static void deleteManifests() {
+	private static void manifests(Phase phase) {
 
-		try {
+		InputStream deploymentStream = util.inputStream("istio-deployment.yaml");
+		InputStream serviceStream = util.inputStream("istio-service.yaml");
+		InputStream ingressStream = util.inputStream("istio-ingress.yaml");
 
-			client.apps().deployments().inNamespace(NAMESPACE).withName(deploymentName).delete();
-			client.services().inNamespace(NAMESPACE).withName(serviceName).delete();
-			client.network().v1().ingresses().inNamespace(NAMESPACE).withName(ingressName).delete();
+		Deployment deployment = client.apps().deployments().load(deploymentStream).get();
+		Service service = client.services().load(serviceStream).get();
+		Ingress ingress = client.network().v1().ingresses().load(ingressStream).get();
 
+		if (phase.equals(Phase.CREATE)) {
+			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
 		}
-		catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-
-	}
-
-	private static void deployManifests() {
-
-		try {
-
-			Deployment deployment = client.apps().deployments().load(getDeployment()).get();
-
-			String version = K8SUtils.getPomVersion();
-			String currentImage = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage();
-			deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(currentImage + ":" + version);
-
-			client.apps().deployments().inNamespace(NAMESPACE).create(deployment);
-			deploymentName = deployment.getMetadata().getName();
-
-			Service service = client.services().load(getService()).get();
-			serviceName = service.getMetadata().getName();
-			client.services().inNamespace(NAMESPACE).create(service);
-
-			Ingress ingress = client.network().v1().ingresses().load(getIngress()).get();
-			ingressName = ingress.getMetadata().getName();
-			client.network().v1().ingresses().inNamespace(NAMESPACE).create(ingress);
-
-			Fabric8Utils.waitForDeployment(client, "spring-cloud-kubernetes-fabric8-istio-it-deployment", NAMESPACE, 2,
-					600);
-
-		}
-		catch (Exception e) {
-			throw new RuntimeException(e);
+		else {
+			util.deleteAndWait(NAMESPACE, deployment, service, ingress);
 		}
 
 	}
 
-	private static FileInputStream getService() throws Exception {
-		return Fabric8Utils.inputStream("istio-service.yaml");
+	private WebClient.Builder builder() {
+		return WebClient.builder().clientConnector(new ReactorClientHttpConnector(HttpClient.create()));
 	}
 
-	private static FileInputStream getDeployment() throws Exception {
-		return Fabric8Utils.inputStream("istio-deployment.yaml");
-	}
-
-	private static FileInputStream getIngress() throws Exception {
-		return Fabric8Utils.inputStream("istio-ingress.yaml");
+	private RetryBackoffSpec retrySpec() {
+		return Retry.fixedDelay(15, Duration.ofSeconds(1)).filter(Objects::nonNull);
 	}
 
 }

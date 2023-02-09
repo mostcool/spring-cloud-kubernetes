@@ -16,107 +16,73 @@
 
 package org.springframework.cloud.kubernetes.core.k8s.it;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 
-import io.kubernetes.client.openapi.ApiClient;
-import io.kubernetes.client.openapi.apis.AppsV1Api;
-import io.kubernetes.client.openapi.apis.CoreV1Api;
-import io.kubernetes.client.openapi.apis.NetworkingV1Api;
 import io.kubernetes.client.openapi.models.V1Deployment;
 import io.kubernetes.client.openapi.models.V1Ingress;
 import io.kubernetes.client.openapi.models.V1Service;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.k3s.K3sContainer;
+import reactor.netty.http.client.HttpClient;
+import reactor.util.retry.Retry;
+import reactor.util.retry.RetryBackoffSpec;
 
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils;
-import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.web.client.ResponseErrorHandler;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
+import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.ResolvableType;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.WebClient;
 
-import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
-import static org.awaitility.Awaitility.await;
-import static org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils.createApiClient;
-import static org.springframework.cloud.kubernetes.integration.tests.commons.K8SUtils.getPomVersion;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Ryan Baxter
  */
-public class ActuatorEndpointIT {
-
-	private static final Log LOG = LogFactory.getLog(ActuatorEndpointIT.class);
-
-	private static final String SPRING_CLOUD_K8S_CLIENT_IT_DEPLOYMENT_NAME = "spring-cloud-kubernetes-core-k8s-client-it-deployment";
-
-	private static final String K8S_CONFIG_CLIENT_IT_NAME = "spring-cloud-kubernetes-core-k8s-client-it-deployment";
+class ActuatorEndpointIT {
 
 	private static final String K8S_CONFIG_CLIENT_IT_SERVICE_NAME = "spring-cloud-kubernetes-core-k8s-client-it";
 
 	private static final String NAMESPACE = "default";
 
-	private static ApiClient client;
+	private static final K3sContainer K3S = Commons.container();
 
-	private static CoreV1Api api;
-
-	private static AppsV1Api appsApi;
-
-	private static NetworkingV1Api networkingApi;
-
-	private static K8SUtils k8SUtils;
+	private static Util util;
 
 	@BeforeAll
-	public static void setup() throws Exception {
-		client = createApiClient();
-		api = new CoreV1Api();
-		appsApi = new AppsV1Api();
-		networkingApi = new NetworkingV1Api();
-		k8SUtils = new K8SUtils(api, appsApi);
-
-		deployCoreK8sClientIt();
-
-		// Check to make sure the controller deployment is ready
-		k8SUtils.waitForDeployment(SPRING_CLOUD_K8S_CLIENT_IT_DEPLOYMENT_NAME, NAMESPACE);
+	static void beforeAll() throws Exception {
+		K3S.start();
+		Commons.validateImage(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, K3S);
+		Commons.loadSpringCloudKubernetesImage(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, K3S);
+		util = new Util(K3S);
+		util.setUp(NAMESPACE);
+		coreK8sClientIt(Phase.CREATE);
 	}
 
 	@AfterAll
-	public static void after() throws Exception {
-		appsApi.deleteCollectionNamespacedDeployment(NAMESPACE, null, null, null,
-				"metadata.name=" + K8S_CONFIG_CLIENT_IT_NAME, null, null, null, null, null, null, null, null, null);
-		api.deleteNamespacedService(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, NAMESPACE, null, null, null, null, null, null);
-		networkingApi.deleteNamespacedIngress("it-ingress", NAMESPACE, null, null, null, null, null, null);
+	static void afterAll() {
+		coreK8sClientIt(Phase.DELETE);
 	}
 
 	@Test
-	public void testHealth() {
-		RestTemplate rest = new RestTemplateBuilder().build();
+	@SuppressWarnings("unchecked")
+	void testHealth() {
 
-		rest.setErrorHandler(new ResponseErrorHandler() {
-			@Override
-			public boolean hasError(ClientHttpResponse clientHttpResponse) throws IOException {
-				LOG.warn("Received response status code: " + clientHttpResponse.getRawStatusCode());
-				return clientHttpResponse.getRawStatusCode() != 503;
-			}
+		WebClient.Builder builder = builder();
+		WebClient serviceClient = builder.baseUrl("http://localhost:80/actuator/health").build();
 
-			@Override
-			public void handleError(ClientHttpResponse clientHttpResponse) throws IOException {
+		ResolvableType resolvableType = ResolvableType.forClassWithGenerics(Map.class, String.class, Object.class);
+		@SuppressWarnings("unchecked")
+		Map<String, Object> health = (Map<String, Object>) serviceClient.method(HttpMethod.GET).retrieve()
+				.bodyToMono(ParameterizedTypeReference.forType(resolvableType.getType())).retryWhen(retrySpec())
+				.block();
 
-			}
-		});
-
-		// Sometimes the NGINX ingress takes a bit to catch up and realize the service is
-		// available and we get a 503, we just need to wait a bit
-		await().timeout(Duration.ofSeconds(60))
-				.until(() -> rest.getForEntity("http://localhost:80/core-k8s-client-it/actuator/health", String.class)
-						.getStatusCode().is2xxSuccessful());
-		LOG.debug("Response from /health endpoint: "
-				+ rest.getForEntity("http://localhost:80/core-k8s-client-it/actuator/health", String.class));
-		Map<String, Object> health = rest.getForObject("http://localhost:80/core-k8s-client-it/actuator/health",
-				Map.class);
 		Map<String, Object> components = (Map<String, Object>) health.get("components");
 		assertThat(components.containsKey("kubernetes")).isTrue();
 		Map<String, Object> kubernetes = (Map<String, Object>) components.get("kubernetes");
@@ -132,35 +98,24 @@ public class ActuatorEndpointIT {
 		assertThat(details.containsKey("serviceAccount")).isTrue();
 
 		assertThat(components.containsKey("discoveryComposite")).isTrue();
-		Map<String, Object> discoveryComposite = (Map) components.get("discoveryComposite");
+		Map<String, Object> discoveryComposite = (Map<String, Object>) components.get("discoveryComposite");
 		assertThat(discoveryComposite.get("status")).isEqualTo("UP");
+
 	}
 
 	@Test
-	public void testInfo() {
-		RestTemplate rest = new RestTemplateBuilder().build();
+	@SuppressWarnings("unchecked")
+	void testInfo() {
 
-		rest.setErrorHandler(new ResponseErrorHandler() {
-			@Override
-			public boolean hasError(ClientHttpResponse clientHttpResponse) throws IOException {
-				LOG.warn("Received response status code: " + clientHttpResponse.getRawStatusCode());
-				return clientHttpResponse.getRawStatusCode() != 503;
-			}
+		WebClient.Builder builder = builder();
+		WebClient serviceClient = builder.baseUrl("http://localhost:80/actuator/info").build();
 
-			@Override
-			public void handleError(ClientHttpResponse clientHttpResponse) {
+		ResolvableType resolvableType = ResolvableType.forClassWithGenerics(Map.class, String.class, Object.class);
+		@SuppressWarnings("unchecked")
+		Map<String, Object> info = (Map<String, Object>) serviceClient.method(HttpMethod.GET).retrieve()
+				.bodyToMono(ParameterizedTypeReference.forType(resolvableType.getType())).retryWhen(retrySpec())
+				.block();
 
-			}
-		});
-
-		// Sometimes the NGINX ingress takes a bit to catch up and realize the service is
-		// available and we get a 503, we just need to wait a bit
-		await().timeout(Duration.ofSeconds(60))
-				.until(() -> rest.getForEntity("http://localhost:80/core-k8s-client-it/actuator/info", String.class)
-						.getStatusCode().is2xxSuccessful());
-		LOG.debug("Response from /info endpoint: "
-				+ rest.getForEntity("http://localhost:80/core-k8s-client-it/actuator/info", String.class));
-		Map<String, Object> info = rest.getForObject("http://localhost:80/core-k8s-client-it/actuator/info", Map.class);
 		Map<String, Object> kubernetes = (Map<String, Object>) info.get("kubernetes");
 		assertThat(kubernetes.containsKey("hostIp")).isTrue();
 		assertThat(kubernetes.containsKey("inside")).isTrue();
@@ -171,27 +126,26 @@ public class ActuatorEndpointIT {
 		assertThat(kubernetes.containsKey("serviceAccount")).isTrue();
 	}
 
-	private static void deployCoreK8sClientIt() throws Exception {
-		appsApi.createNamespacedDeployment(NAMESPACE, getCoreK8sClientItDeployment(), null, null, null);
-		api.createNamespacedService(NAMESPACE, getCoreK8sClientItService(), null, null, null);
-		networkingApi.createNamespacedIngress(NAMESPACE, getCoreK8sClientItIngress(), null, null, null);
+	private static void coreK8sClientIt(Phase phase) {
+		V1Deployment deployment = (V1Deployment) util
+				.yaml("spring-cloud-kubernetes-core-k8s-client-it-deployment.yaml");
+		V1Service service = (V1Service) util.yaml("spring-cloud-kubernetes-core-k8s-client-it-service.yaml");
+		V1Ingress ingress = (V1Ingress) util.yaml("spring-cloud-kubernetes-core-k8s-client-it-ingress.yaml");
+
+		if (phase.equals(Phase.CREATE)) {
+			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
+		}
+		else {
+			util.deleteAndWait(NAMESPACE, deployment, service, ingress);
+		}
 	}
 
-	private static V1Deployment getCoreK8sClientItDeployment() throws Exception {
-		V1Deployment deployment = (V1Deployment) K8SUtils
-				.readYamlFromClasspath("spring-cloud-kubernetes-core-k8s-client-it-deployment.yaml");
-		String image = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage() + ":"
-				+ getPomVersion();
-		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(image);
-		return deployment;
+	private WebClient.Builder builder() {
+		return WebClient.builder().clientConnector(new ReactorClientHttpConnector(HttpClient.create()));
 	}
 
-	private static V1Service getCoreK8sClientItService() throws Exception {
-		return (V1Service) K8SUtils.readYamlFromClasspath("spring-cloud-kubernetes-core-k8s-client-it-service.yaml");
-	}
-
-	private static V1Ingress getCoreK8sClientItIngress() throws Exception {
-		return (V1Ingress) K8SUtils.readYamlFromClasspath("spring-cloud-kubernetes-core-k8s-client-it-ingress.yaml");
+	private RetryBackoffSpec retrySpec() {
+		return Retry.fixedDelay(15, Duration.ofSeconds(1)).filter(Objects::nonNull);
 	}
 
 }

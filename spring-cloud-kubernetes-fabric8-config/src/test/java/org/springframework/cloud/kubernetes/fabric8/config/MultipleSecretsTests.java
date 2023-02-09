@@ -24,27 +24,15 @@ import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.kubernetes.fabric8.config.example3.MultiSecretsApp;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
  * @author Haytham Mohamed
  */
-@ExtendWith(SpringExtension.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = MultiSecretsApp.class,
-		properties = { "spring.cloud.bootstrap.name=multiple-secrets", "spring.main.cloud-platform=KUBERNETES" })
-@AutoConfigureWebTestClient
-@EnableKubernetesMockClient(crud = true, https = false)
-public class MultipleSecretsTests {
+abstract class MultipleSecretsTests {
 
 	private static final String DEFAULT_NAMESPACE = "ns1";
 
@@ -54,14 +42,10 @@ public class MultipleSecretsTests {
 
 	private static final String SECRET_VALUE_2 = "secretValue-2";
 
-	// will be injected by KubernetesMockServerExtension
-	private static KubernetesClient mockClient;
-
 	@Autowired
 	private WebTestClient webClient;
 
-	@BeforeAll
-	public static void setUpBeforeClass() {
+	public static void setUpBeforeClass(KubernetesClient mockClient) {
 		// Configure the kubernetes master url to point to the mock server
 		System.setProperty(Config.KUBERNETES_MASTER_SYSTEM_PROPERTY, mockClient.getConfiguration().getMasterUrl());
 		System.setProperty(Config.KUBERNETES_TRUST_CERT_SYSTEM_PROPERTY, "true");
@@ -77,7 +61,7 @@ public class MultipleSecretsTests {
 		Secret secret1 = new SecretBuilder().withNewMetadata().withName("name1").withLabels(metadata1).endMetadata()
 				.addToData("secrets.secret1", Base64.getEncoder().encodeToString(SECRET_VALUE_1.getBytes())).build();
 
-		mockClient.secrets().inNamespace(DEFAULT_NAMESPACE).create(secret1);
+		mockClient.secrets().inNamespace(DEFAULT_NAMESPACE).resource(secret1).create();
 
 		Map<String, String> metadata2 = new HashMap<>();
 		metadata2.put("env", "env2");
@@ -86,7 +70,7 @@ public class MultipleSecretsTests {
 		Secret secret2 = new SecretBuilder().withNewMetadata().withName("name2").withLabels(metadata2).endMetadata()
 				.addToData("secrets.secret2", Base64.getEncoder().encodeToString(SECRET_VALUE_2.getBytes())).build();
 
-		mockClient.secrets().inNamespace(ANOTHER_NAMESPACE).create(secret2);
+		mockClient.secrets().inNamespace(ANOTHER_NAMESPACE).resource(secret2).create();
 	}
 
 	@Test
