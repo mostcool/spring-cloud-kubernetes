@@ -29,6 +29,7 @@ import io.kubernetes.client.openapi.models.V1EnvVar;
 import io.kubernetes.client.openapi.models.V1EnvVarBuilder;
 import io.kubernetes.client.openapi.models.V1Ingress;
 import io.kubernetes.client.openapi.models.V1Service;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -74,6 +75,11 @@ public class KubernetesClientCatalogWatchNamespacesIT {
 		util.setUp(NAMESPACE_DEFAULT);
 	}
 
+	@AfterAll
+	static void afterAll() {
+		Commons.systemPrune();
+	}
+
 	@BeforeEach
 	void beforeEach() {
 		util.createNamespace(NAMESPACE_A);
@@ -85,6 +91,7 @@ public class KubernetesClientCatalogWatchNamespacesIT {
 
 	@AfterEach
 	void afterEach() {
+		util.deleteClusterWide(NAMESPACE_DEFAULT, Set.of(NAMESPACE_A, NAMESPACE_B));
 		util.deleteNamespace(NAMESPACE_A);
 		util.deleteNamespace(NAMESPACE_B);
 	}
@@ -133,7 +140,7 @@ public class KubernetesClientCatalogWatchNamespacesIT {
 	 */
 	private void test() {
 
-		WebClient client = builder().baseUrl("localhost/result").build();
+		WebClient client = builder().baseUrl("http://localhost/result").build();
 		EndpointNameAndNamespace[] holder = new EndpointNameAndNamespace[4];
 		ResolvableType resolvableType = ResolvableType.forClassWithGenerics(List.class, EndpointNameAndNamespace.class);
 

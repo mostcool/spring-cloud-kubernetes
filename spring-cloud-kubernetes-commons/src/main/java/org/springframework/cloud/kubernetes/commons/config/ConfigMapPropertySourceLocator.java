@@ -99,6 +99,11 @@ public abstract class ConfigMapPropertySourceLocator implements PropertySourceLo
 
 	private void addPropertySourcesFromPaths(Environment environment, CompositePropertySource composite) {
 		Set<String> uniquePaths = new LinkedHashSet<>(properties.paths());
+		if (!uniquePaths.isEmpty()) {
+			LOG.warn(
+					"path support is deprecated and will be removed in a future release. Please use spring.config.import");
+		}
+		LOG.debug("paths property sources : " + uniquePaths);
 		uniquePaths.stream().map(Paths::get).filter(p -> {
 			boolean exists = Files.exists(p);
 			if (!exists) {
@@ -139,7 +144,8 @@ public abstract class ConfigMapPropertySourceLocator implements PropertySourceLo
 			LOG.warn("Property source: " + name + "will be ignored because no properties could be found");
 		}
 		else {
-			composite.addFirstPropertySource(new MapPropertySource(name, map));
+			LOG.debug("will add file-based property source : " + name);
+			composite.addFirstPropertySource(new MountConfigMapPropertySource(name, map));
 		}
 	}
 

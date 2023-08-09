@@ -19,19 +19,16 @@ package org.springframework.cloud.kubernetes.fabric8.config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.kubernetes.fabric8.config.example.App;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 /**
  * Tests reading property from YAML document specified by profile expression.
  */
 
-@ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = App.class,
 		properties = { "spring.application.name=configmap-with-profile-example",
 				"spring.cloud.kubernetes.reload.enabled=false", "spring.main.cloud-platform=KUBERNETES",
@@ -39,12 +36,12 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 @ActiveProfiles({ "production", "us-east" })
 @AutoConfigureWebTestClient
 @EnableKubernetesMockClient(crud = true, https = false)
-public class BootstrapConfigMapsWithProfileExpressionTests extends ConfigMapsWithProfileExpressionTests {
+class BootstrapConfigMapsWithProfileExpressionTests extends ConfigMapsWithProfileExpressionTests {
 
 	private static KubernetesClient mockClient;
 
 	@BeforeAll
-	public static void setUpBeforeClass() {
+	static void setUpBeforeClass() {
 		setUpBeforeClass(mockClient);
 	}
 

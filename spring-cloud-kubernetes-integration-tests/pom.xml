@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.springframework.cloud</groupId>
 		<artifactId>spring-cloud-kubernetes</artifactId>
-		<version>3.0.2-SNAPSHOT</version>
+		<version>3.1.0-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>spring-cloud-kubernetes-integration-tests</artifactId>
@@ -18,7 +18,7 @@
 	<properties>
 		<java.version>17</java.version>
 		<docker-java.version>3.2.13</docker-java.version>
-		<testcontainers.version>1.16.3</testcontainers.version>
+		<testcontainers.version>1.18.0</testcontainers.version>
 	</properties>
 
 	<build>
@@ -36,30 +36,6 @@
 
 	<dependencyManagement>
 		<dependencies>
-			<dependency>
-				<groupId>com.github.docker-java</groupId>
-				<artifactId>docker-java-core</artifactId>
-				<version>${docker-java.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>com.github.docker-java</groupId>
-				<artifactId>docker-java-transport-httpclient5</artifactId>
-				<version>${docker-java.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.testcontainers</groupId>
-				<artifactId>testcontainers</artifactId>
-				<version>${testcontainers.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.testcontainers</groupId>
-				<artifactId>junit-jupiter</artifactId>
-				<version>${testcontainers.version}</version>
-				<scope>test</scope>
-			</dependency>
 			<dependency>
 				<groupId>org.testcontainers</groupId>
 				<artifactId>k3s</artifactId>
@@ -92,5 +68,8 @@
         <module>spring-cloud-kubernetes-client-secrets-event-reload-multiple-apps</module>
         <module>spring-cloud-kubernetes-fabric8-client-catalog-watcher</module>
         <module>spring-cloud-kubernetes-client-catalog-watcher</module>
+		<module>spring-cloud-kubernetes-client-discovery-it</module>
+		<module>spring-cloud-kubernetes-fabric8-client-discovery-with-bootstrap</module>
+        <module>spring-cloud-kubernetes-client-configmap-polling-reload</module>
     </modules>
 </project>

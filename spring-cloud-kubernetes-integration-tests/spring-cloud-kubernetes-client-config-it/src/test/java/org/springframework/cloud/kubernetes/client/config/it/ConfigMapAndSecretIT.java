@@ -55,9 +55,9 @@ import static org.awaitility.Awaitility.await;
  */
 class ConfigMapAndSecretIT {
 
-	private static final String PROPERTY_URL = "localhost:80/myProperty";
+	private static final String PROPERTY_URL = "http://localhost:80/myProperty";
 
-	private static final String SECRET_URL = "localhost:80/mySecret";
+	private static final String SECRET_URL = "http://localhost:80/mySecret";
 
 	private static final String K8S_CONFIG_CLIENT_IT_SERVICE_NAME = "spring-cloud-kubernetes-client-config-it";
 
@@ -84,6 +84,7 @@ class ConfigMapAndSecretIT {
 	@AfterAll
 	static void afterAll() throws Exception {
 		Commons.cleanUp(K8S_CONFIG_CLIENT_IT_SERVICE_NAME, K3S);
+		Commons.systemPrune();
 	}
 
 	@AfterEach
@@ -114,7 +115,7 @@ class ConfigMapAndSecretIT {
 		WebClient.Builder builder = builder();
 		WebClient propertyClient = builder.baseUrl(PROPERTY_URL).build();
 
-		await().timeout(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(2)).until(() -> propertyClient
+		await().timeout(Duration.ofSeconds(120)).pollInterval(Duration.ofSeconds(2)).until(() -> propertyClient
 				.method(HttpMethod.GET).retrieve().bodyToMono(String.class).block().equals("from-config-map"));
 
 		WebClient secretClient = builder.baseUrl(SECRET_URL).build();

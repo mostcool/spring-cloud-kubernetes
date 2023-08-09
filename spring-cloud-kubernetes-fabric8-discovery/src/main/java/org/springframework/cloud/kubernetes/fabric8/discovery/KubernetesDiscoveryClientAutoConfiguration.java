@@ -17,6 +17,7 @@
 package org.springframework.cloud.kubernetes.fabric8.discovery;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
+import org.apache.commons.logging.LogFactory;
 
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
@@ -35,11 +36,13 @@ import org.springframework.cloud.kubernetes.commons.discovery.ConditionalOnKuber
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryClientHealthIndicatorInitializer;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryPropertiesAutoConfiguration;
+import org.springframework.cloud.kubernetes.commons.discovery.ServicePortSecureResolver;
 import org.springframework.cloud.kubernetes.fabric8.Fabric8AutoConfiguration;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.core.log.LogAccessor;
 
 /**
  * Auto configuration for discovery clients.
@@ -55,6 +58,9 @@ import org.springframework.core.env.Environment;
 @AutoConfigureBefore({ SimpleDiscoveryClientAutoConfiguration.class, CommonsClientAutoConfiguration.class })
 @AutoConfigureAfter({ Fabric8AutoConfiguration.class, KubernetesDiscoveryPropertiesAutoConfiguration.class })
 public class KubernetesDiscoveryClientAutoConfiguration {
+
+	private static final LogAccessor LOG = new LogAccessor(
+			LogFactory.getLog(KubernetesDiscoveryClientAutoConfiguration.class));
 
 	@Bean
 	@ConditionalOnMissingBean
@@ -77,6 +83,7 @@ public class KubernetesDiscoveryClientAutoConfiguration {
 	@ConditionalOnDiscoveryHealthIndicatorEnabled
 	public KubernetesDiscoveryClientHealthIndicatorInitializer indicatorInitializer(
 			ApplicationEventPublisher applicationEventPublisher, PodUtils<?> podUtils) {
+		LOG.debug(() -> "Will publish InstanceRegisteredEvent from blocking implementation");
 		return new KubernetesDiscoveryClientHealthIndicatorInitializer(podUtils, applicationEventPublisher);
 	}
 

@@ -24,6 +24,7 @@ import java.net.HttpURLConnection;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -36,6 +37,7 @@ import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.apis.NetworkingV1Api;
 import io.kubernetes.client.openapi.apis.RbacAuthorizationV1Api;
 import io.kubernetes.client.openapi.models.V1ClusterRole;
+import io.kubernetes.client.openapi.models.V1ClusterRoleBinding;
 import io.kubernetes.client.openapi.models.V1ConfigMap;
 import io.kubernetes.client.openapi.models.V1Deployment;
 import io.kubernetes.client.openapi.models.V1DeploymentList;
@@ -131,6 +133,9 @@ public final class Util {
 			}
 		}
 		catch (Exception e) {
+			if (e instanceof ApiException apiException) {
+				System.out.println(apiException.getResponseBody());
+			}
 			throw new RuntimeException(e);
 		}
 	}
@@ -298,6 +303,49 @@ public final class Util {
 
 	}
 
+	public void setUpClusterWideClusterRoleBinding(String serviceAccountNamespace) {
+
+		try {
+			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("cluster/service-account.yaml");
+			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api.readNamespacedServiceAccount(
+					serviceAccount.getMetadata().getName(), serviceAccountNamespace, null);
+			CheckedSupplier<V1ServiceAccount> accountDefaulter = () -> coreV1Api
+					.createNamespacedServiceAccount(serviceAccountNamespace, serviceAccount, null, null, null, null);
+			notExistsHandler(accountSupplier, accountDefaulter);
+
+			V1ClusterRole clusterRole = (V1ClusterRole) yaml("cluster/cluster-role.yaml");
+			notExistsHandler(() -> rbacApi.readClusterRole(clusterRole.getMetadata().getName(), null),
+					() -> rbacApi.createClusterRole(clusterRole, null, null, null, null));
+
+			V1ClusterRoleBinding clusterRoleBinding = (V1ClusterRoleBinding) yaml("cluster/cluster-role-binding.yaml");
+			notExistsHandler(() -> rbacApi.readClusterRoleBinding(clusterRoleBinding.getMetadata().getName(), null),
+					() -> rbacApi.createClusterRoleBinding(clusterRoleBinding, null, null, null, null));
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			throw new RuntimeException(e);
+		}
+
+	}
+
+	public void deleteClusterWideClusterRoleBinding(String serviceAccountNamespace) {
+		try {
+			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("cluster/service-account.yaml");
+			V1ClusterRole clusterRole = (V1ClusterRole) yaml("cluster/cluster-role.yaml");
+			V1ClusterRoleBinding clusterRoleBinding = (V1ClusterRoleBinding) yaml("cluster/cluster-role-binding.yaml");
+
+			coreV1Api.deleteNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace,
+					null, null, null, null, null, null);
+			rbacApi.deleteClusterRole(clusterRole.getMetadata().getName(), null, null, null, null, null, null);
+			rbacApi.deleteClusterRoleBinding(clusterRoleBinding.getMetadata().getName(), null, null, null, null, null,
+					null);
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			throw new RuntimeException(e);
+		}
+	}
+
 	public void setUpClusterWide(String serviceAccountNamespace, Set<String> namespaces) {
 
 		try {
@@ -330,6 +378,31 @@ public final class Util {
 			throw new RuntimeException(e);
 		}
 
+	}
+
+	public void deleteClusterWide(String serviceAccountNamespace, Set<String> namespaces) {
+		try {
+			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("cluster/service-account.yaml");
+			V1ClusterRole clusterRole = (V1ClusterRole) yaml("cluster/cluster-role.yaml");
+			V1RoleBinding roleBinding = (V1RoleBinding) yaml("cluster/role-binding.yaml");
+
+			coreV1Api.deleteNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace,
+					null, null, null, null, null, null);
+			rbacApi.deleteClusterRole(clusterRole.getMetadata().getName(), null, null, null, null, null, null);
+			namespaces.forEach(namespace -> {
+				roleBinding.getMetadata().setNamespace(namespace);
+				try {
+					rbacApi.deleteNamespacedRoleBinding(roleBinding.getMetadata().getName(), namespace, null, null,
+							null, null, null, null);
+				}
+				catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			});
+		}
+		catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	public void deleteNamespace(String name) {
@@ -385,7 +458,7 @@ public final class Util {
 
 	private void waitForDeployment(String namespace, V1Deployment deployment) {
 		String deploymentName = deploymentName(deployment);
-		await().pollInterval(Duration.ofSeconds(1)).atMost(600, TimeUnit.SECONDS)
+		await().pollDelay(Duration.ofSeconds(5)).pollInterval(Duration.ofSeconds(5)).atMost(900, TimeUnit.SECONDS)
 				.until(() -> isDeploymentReady(deploymentName, namespace));
 	}
 
@@ -459,7 +532,7 @@ public final class Util {
 	}
 
 	private void waitForDeploymentToBeDeleted(String deploymentName, String namespace) {
-		await().timeout(Duration.ofSeconds(90)).until(() -> {
+		await().timeout(Duration.ofSeconds(180)).until(() -> {
 			try {
 				appsV1Api.readNamespacedDeployment(deploymentName, namespace, null);
 				return false;
@@ -474,7 +547,7 @@ public final class Util {
 	}
 
 	private void waitForDeploymentPodsToBeDeleted(Map<String, String> labels, String namespace) {
-		await().timeout(Duration.ofSeconds(90)).until(() -> {
+		await().timeout(Duration.ofSeconds(180)).until(() -> {
 			try {
 				int currentNumberOfPods = coreV1Api.listNamespacedPod(namespace, null, null, null, null,
 						labelSelector(labels), null, null, null, null, null).getItems().size();
@@ -515,6 +588,46 @@ public final class Util {
 		LOG.info("Available replicas for " + deploymentName + ": "
 				+ (availableReplicas == null ? 0 : availableReplicas));
 		return availableReplicas != null && availableReplicas >= 1;
+	}
+
+	public void waitForDeploymentAfterPatch(String deploymentName, String namespace, Map<String, String> labels) {
+		try {
+			await().pollDelay(Duration.ofSeconds(4)).pollInterval(Duration.ofSeconds(3)).atMost(60, TimeUnit.SECONDS)
+					.until(() -> isDeploymentReadyAfterPatch(deploymentName, namespace, labels));
+		}
+		catch (Exception e) {
+			if (e instanceof ApiException apiException) {
+				LOG.error("Error: ");
+				LOG.error(apiException.getResponseBody());
+			}
+			throw new RuntimeException(e);
+		}
+
+	}
+
+	private boolean isDeploymentReadyAfterPatch(String deploymentName, String namespace, Map<String, String> labels)
+			throws ApiException {
+
+		V1DeploymentList deployments = appsV1Api.listNamespacedDeployment(namespace, null, null, null,
+				"metadata.name=" + deploymentName, null, null, null, null, null, null);
+		if (deployments.getItems().size() < 1) {
+			fail("No deployment with name " + deploymentName);
+		}
+
+		V1Deployment deployment = deployments.getItems().get(0);
+		// if no replicas are defined, it means only 1 is needed
+		int replicas = Optional.ofNullable(deployment.getSpec().getReplicas()).orElse(1);
+
+		int numberOfPods = coreV1Api.listNamespacedPod(namespace, null, null, null, null, labelSelector(labels), null,
+				null, null, null, null).getItems().size();
+
+		if (numberOfPods != replicas) {
+			LOG.info("number of pods not yet stabilized");
+			return false;
+		}
+
+		return replicas == Optional.ofNullable(deployment.getStatus().getAvailableReplicas()).orElse(0);
+
 	}
 
 	private static <T> void notExistsHandler(CheckedSupplier<T> callee, CheckedSupplier<T> defaulter) throws Exception {

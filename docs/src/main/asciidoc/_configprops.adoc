@@ -62,10 +62,13 @@
 |spring.cloud.kubernetes.discovery.cache-loading-timeout-seconds | `+++60+++` | 
 |spring.cloud.kubernetes.discovery.enabled | `+++true+++` | 
 |spring.cloud.kubernetes.discovery.filter |  | 
+|spring.cloud.kubernetes.discovery.include-external-name-services | `+++false+++` | 
 |spring.cloud.kubernetes.discovery.include-not-ready-addresses | `+++false+++` | 
 |spring.cloud.kubernetes.discovery.known-secure-ports | `+++[443, 8443]+++` | 
 |spring.cloud.kubernetes.discovery.metadata.add-annotations | `+++true+++` | 
 |spring.cloud.kubernetes.discovery.metadata.add-labels | `+++true+++` | 
+|spring.cloud.kubernetes.discovery.metadata.add-pod-annotations | `+++false+++` | 
+|spring.cloud.kubernetes.discovery.metadata.add-pod-labels | `+++false+++` | 
 |spring.cloud.kubernetes.discovery.metadata.add-ports | `+++true+++` | 
 |spring.cloud.kubernetes.discovery.metadata.annotations-prefix |  | 
 |spring.cloud.kubernetes.discovery.metadata.labels-prefix |  | 

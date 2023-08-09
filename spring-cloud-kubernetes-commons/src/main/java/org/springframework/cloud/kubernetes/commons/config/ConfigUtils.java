@@ -264,8 +264,29 @@ public final class ConfigUtils {
 	public static <T> void registerSingle(ConfigurableBootstrapContext bootstrapContext, Class<T> cls, T instance,
 			String name) {
 		bootstrapContext.registerIfAbsent(cls, BootstrapRegistry.InstanceSupplier.of(instance));
-		bootstrapContext.addCloseListener(event -> event.getApplicationContext().getBeanFactory()
-				.registerSingleton(name, event.getBootstrapContext().get(cls)));
+		bootstrapContext.addCloseListener(event -> {
+			if (event.getApplicationContext().getBeanFactory().getSingleton(name) == null) {
+				event.getApplicationContext().getBeanFactory().registerSingleton(name,
+						event.getBootstrapContext().get(cls));
+			}
+		});
+	}
+
+	/**
+	 * append prefix to the keys and return a new Map with the new values.
+	 */
+	public static Map<String, String> keysWithPrefix(Map<String, String> map, String prefix) {
+		if (map == null || map.isEmpty()) {
+			return Map.of();
+		}
+
+		if (!StringUtils.hasText(prefix)) {
+			return map;
+		}
+
+		Map<String, String> result = CollectionUtils.newHashMap(map.size());
+		map.forEach((key, value) -> result.put(prefix + key, value));
+		return result;
 	}
 
 	public static final class Prefix {

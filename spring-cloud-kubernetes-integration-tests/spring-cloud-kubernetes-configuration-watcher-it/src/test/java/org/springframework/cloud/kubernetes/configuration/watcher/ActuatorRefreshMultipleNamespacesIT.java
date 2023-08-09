@@ -77,9 +77,11 @@ class ActuatorRefreshMultipleNamespacesIT {
 
 	@AfterAll
 	static void afterAll() throws Exception {
+		util.deleteClusterWide(DEFAULT_NAMESPACE, Set.of(DEFAULT_NAMESPACE, LEFT_NAMESPACE, RIGHT_NAMESPACE));
 		util.deleteNamespace(LEFT_NAMESPACE);
 		util.deleteNamespace(RIGHT_NAMESPACE);
 		Commons.cleanUp(SPRING_CLOUD_K8S_CONFIG_WATCHER_APP_NAME, K3S);
+		Commons.systemPrune();
 	}
 
 	@BeforeEach

@@ -18,11 +18,15 @@ package org.springframework.cloud.kubernetes.fabric8.configmap.polling.reload;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
+import io.fabric8.kubernetes.api.model.EnvVar;
+import io.fabric8.kubernetes.api.model.EnvVarBuilder;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
@@ -76,11 +80,12 @@ class ConfigMapPollingReloadIT {
 	static void after() throws Exception {
 		manifests(Phase.DELETE);
 		Commons.cleanUp(IMAGE_NAME, K3S);
+		Commons.systemPrune();
 	}
 
 	@Test
 	void test() {
-		WebClient webClient = builder().baseUrl("localhost/key").build();
+		WebClient webClient = builder().baseUrl("http://localhost/key").build();
 		String result = webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
 				.block();
 
@@ -107,10 +112,15 @@ class ConfigMapPollingReloadIT {
 		InputStream ingressStream = util.inputStream("ingress.yaml");
 		InputStream configMapStream = util.inputStream("configmap.yaml");
 
-		Deployment deployment = client.apps().deployments().load(deploymentStream).get();
-		Service service = client.services().load(serviceStream).get();
-		Ingress ingress = client.network().v1().ingresses().load(ingressStream).get();
-		ConfigMap configMap = client.configMaps().load(configMapStream).get();
+		Deployment deployment = client.apps().deployments().load(deploymentStream).item();
+		Service service = client.services().load(serviceStream).item();
+		Ingress ingress = client.network().v1().ingresses().load(ingressStream).item();
+		ConfigMap configMap = client.configMaps().load(configMapStream).item();
+
+		List<EnvVar> existing = new ArrayList<>(
+				deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv());
+		existing.add(new EnvVarBuilder().withName("SPRING_PROFILES_ACTIVE").withValue("no-mount").build());
+		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setEnv(existing);
 
 		if (phase.equals(Phase.CREATE)) {
 			util.createAndWait(NAMESPACE, configMap, null);

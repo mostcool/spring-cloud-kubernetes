@@ -17,8 +17,11 @@
 package org.springframework.cloud.kubernetes.client.configmap.event.reload;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
@@ -28,6 +31,7 @@ import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1ConfigMap;
 import io.kubernetes.client.openapi.models.V1ConfigMapBuilder;
 import io.kubernetes.client.openapi.models.V1Deployment;
+import io.kubernetes.client.openapi.models.V1EnvVar;
 import io.kubernetes.client.openapi.models.V1Ingress;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
 import io.kubernetes.client.openapi.models.V1Service;
@@ -78,9 +82,11 @@ class ConfigMapEventReloadIT {
 
 	@AfterAll
 	static void afterAll() throws Exception {
+		util.deleteClusterWide(NAMESPACE, Set.of("left", "right"));
 		util.deleteNamespace("left");
 		util.deleteNamespace("right");
 		Commons.cleanUp(IMAGE_NAME, K3S);
+		Commons.systemPrune();
 	}
 
 	/**
@@ -93,11 +99,11 @@ class ConfigMapEventReloadIT {
 	 */
 	@Test
 	void testInformFromOneNamespaceEventNotTriggered() throws Exception {
-		manifests("one", Phase.CREATE);
+		manifests("one", Phase.CREATE, false);
 		Commons.assertReloadLogStatements("added configmap informer for namespace",
 				"added secret informer for namespace", IMAGE_NAME);
 
-		WebClient webClient = builder().baseUrl("localhost/left").build();
+		WebClient webClient = builder().baseUrl("http://localhost/left").build();
 		String result = webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
 				.block();
 
@@ -105,7 +111,7 @@ class ConfigMapEventReloadIT {
 		Assertions.assertEquals("left-initial", result);
 
 		// then read the value from the right-configmap
-		webClient = builder().baseUrl("localhost/right").build();
+		webClient = builder().baseUrl("http://localhost/right").build();
 		result = webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec()).block();
 		Assertions.assertEquals("right-initial", result);
 
@@ -119,12 +125,12 @@ class ConfigMapEventReloadIT {
 		// wait dummy for 5 seconds
 		LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(5));
 
-		webClient = builder().baseUrl("localhost/left").build();
+		webClient = builder().baseUrl("http://localhost/left").build();
 		result = webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec()).block();
 		// left configmap has not changed, no restart of app has happened
 		Assertions.assertEquals("left-initial", result);
 
-		manifests("one", Phase.DELETE);
+		manifests("one", Phase.DELETE, false);
 	}
 
 	/**
@@ -137,12 +143,12 @@ class ConfigMapEventReloadIT {
 	 */
 	@Test
 	void testInformFromOneNamespaceEventTriggered() throws Exception {
-		manifests("two", Phase.CREATE);
+		manifests("two", Phase.CREATE, false);
 		Commons.assertReloadLogStatements("added configmap informer for namespace",
 				"added secret informer for namespace", IMAGE_NAME);
 
 		// read the value from the right-configmap
-		WebClient webClient = builder().baseUrl("localhost/right").build();
+		WebClient webClient = builder().baseUrl("http://localhost/right").build();
 		String result = webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
 				.block();
 		Assertions.assertEquals("right-initial", result);
@@ -156,7 +162,7 @@ class ConfigMapEventReloadIT {
 
 		String[] resultAfterChange = new String[1];
 		await().pollInterval(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(90)).until(() -> {
-			WebClient innerWebClient = builder().baseUrl("localhost/right").build();
+			WebClient innerWebClient = builder().baseUrl("http://localhost/right").build();
 			String innerResult = innerWebClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
 					.retryWhen(retrySpec()).block();
 
@@ -165,7 +171,7 @@ class ConfigMapEventReloadIT {
 		});
 		Assertions.assertEquals("right-after-change", resultAfterChange[0]);
 
-		manifests("two", Phase.DELETE);
+		manifests("two", Phase.DELETE, false);
 	}
 
 	/**
@@ -179,18 +185,18 @@ class ConfigMapEventReloadIT {
 	 */
 	@Test
 	void testInform() throws Exception {
-		manifests("three", Phase.CREATE);
+		manifests("three", Phase.CREATE, false);
 		Commons.assertReloadLogStatements("added configmap informer for namespace",
 				"added secret informer for namespace", IMAGE_NAME);
 
 		// read the initial value from the right-configmap
-		WebClient rightWebClient = builder().baseUrl("localhost/right").build();
+		WebClient rightWebClient = builder().baseUrl("http://localhost/right").build();
 		String rightResult = rightWebClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
 				.retryWhen(retrySpec()).block();
 		Assertions.assertEquals("right-initial", rightResult);
 
 		// then read the initial value from the right-with-label-configmap
-		WebClient rightWithLabelWebClient = builder().baseUrl("localhost/with-label").build();
+		WebClient rightWithLabelWebClient = builder().baseUrl("http://localhost/with-label").build();
 		String rightWithLabelResult = rightWithLabelWebClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
 				.retryWhen(retrySpec()).block();
 		Assertions.assertEquals("right-with-label-initial", rightWithLabelResult);
@@ -221,7 +227,7 @@ class ConfigMapEventReloadIT {
 		// value
 		String[] resultAfterChange = new String[1];
 		await().pollInterval(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(90)).until(() -> {
-			WebClient innerWebClient = builder().baseUrl("localhost/with-label").build();
+			WebClient innerWebClient = builder().baseUrl("http://localhost/with-label").build();
 			String innerResult = innerWebClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
 					.retryWhen(retrySpec()).block();
 			resultAfterChange[0] = innerResult;
@@ -235,10 +241,51 @@ class ConfigMapEventReloadIT {
 				.block();
 		Assertions.assertEquals("right-after-change", rightResult);
 
-		manifests("three", Phase.DELETE);
+		manifests("three", Phase.DELETE, false);
 	}
 
-	private static void manifests(String deploymentRoot, Phase phase) {
+	/**
+	 * <pre>
+	 *     - there are two namespaces : left and right
+	 *     - each of the namespaces has one configmap
+	 *     - we watch the "right" namespace and make a change in the configmap in the same namespace
+	 *     - as such, event is triggered and we see the updated value
+	 * </pre>
+	 */
+	@Test
+	void testInformFromOneNamespaceEventTriggeredSecretsDisabled() throws Exception {
+		manifests("two", Phase.CREATE, true);
+		Commons.assertReloadLogStatements("added configmap informer for namespace",
+				"added secret informer for namespace", IMAGE_NAME);
+
+		// read the value from the right-configmap
+		WebClient webClient = builder().baseUrl("http://localhost/right").build();
+		String result = webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
+				.block();
+		Assertions.assertEquals("right-initial", result);
+
+		// then deploy a new version of right-configmap
+		V1ConfigMap rightConfigMapAfterChange = new V1ConfigMapBuilder()
+				.withMetadata(new V1ObjectMeta().namespace("right").name("right-configmap"))
+				.withData(Map.of("right.value", "right-after-change")).build();
+
+		replaceConfigMap(rightConfigMapAfterChange, "right-configmap");
+
+		String[] resultAfterChange = new String[1];
+		await().pollInterval(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(90)).until(() -> {
+			WebClient innerWebClient = builder().baseUrl("http://localhost/right").build();
+			String innerResult = innerWebClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
+					.retryWhen(retrySpec()).block();
+
+			resultAfterChange[0] = innerResult;
+			return innerResult != null;
+		});
+		Assertions.assertEquals("right-after-change", resultAfterChange[0]);
+
+		manifests("two", Phase.DELETE, true);
+	}
+
+	private static void manifests(String deploymentRoot, Phase phase, boolean secretsDisabled) {
 
 		try {
 
@@ -249,6 +296,17 @@ class ConfigMapEventReloadIT {
 			V1Deployment deployment = (V1Deployment) util.yaml(deploymentRoot + "/deployment.yaml");
 			V1Service service = (V1Service) util.yaml("service.yaml");
 			V1Ingress ingress = (V1Ingress) util.yaml("ingress.yaml");
+
+			List<V1EnvVar> envVars = new ArrayList<>(
+					Optional.ofNullable(deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv())
+							.orElse(List.of()));
+
+			if (secretsDisabled) {
+				V1EnvVar secretsDisabledEnvVar = new V1EnvVar().name("SPRING_CLOUD_KUBERNETES_SECRETS_ENABLED")
+						.value("FALSE");
+				envVars.add(secretsDisabledEnvVar);
+				deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setEnv(envVars);
+			}
 
 			if (phase.equals(Phase.CREATE)) {
 				util.createAndWait("left", leftConfigMap, null);

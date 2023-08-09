@@ -41,6 +41,7 @@ import org.springframework.cloud.kubernetes.commons.discovery.ConditionalOnKuber
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryPropertiesAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.log.LogAccessor;
 
@@ -48,13 +49,18 @@ import static io.kubernetes.client.util.Namespaces.NAMESPACE_ALL;
 import static io.kubernetes.client.util.Namespaces.NAMESPACE_DEFAULT;
 
 /**
+ * This configuration is not used by us internally and will be removed in a future
+ * release. Use it at your own risk.
+ *
  * @author wind57
  */
+@Deprecated(forRemoval = true)
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnDiscoveryEnabled
 @ConditionalOnKubernetesDiscoveryEnabled
 @ConditionalOnBlockingOrReactiveEnabled
 @ConditionalOnCloudPlatform(CloudPlatform.KUBERNETES)
+@Conditional(ConditionalOnSelectiveNamespacesMissing.class)
 @AutoConfigureBefore({ SimpleDiscoveryClientAutoConfiguration.class, CommonsClientAutoConfiguration.class })
 @AutoConfigureAfter({ KubernetesClientAutoConfiguration.class, KubernetesDiscoveryPropertiesAutoConfiguration.class })
 public class KubernetesInformerAutoConfiguration {
