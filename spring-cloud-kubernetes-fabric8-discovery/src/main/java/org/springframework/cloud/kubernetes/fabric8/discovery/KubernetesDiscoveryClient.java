@@ -17,7 +17,6 @@
 package org.springframework.cloud.kubernetes.fabric8.discovery;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,9 +47,8 @@ import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesD
 import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8InstanceIdHostPodNameSupplier.externalName;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8InstanceIdHostPodNameSupplier.nonExternalName;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.addresses;
-import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.endpointSubsetPortsData;
+import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.endpointSubsetsPortData;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.endpoints;
-import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.portsData;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.serviceMetadata;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.services;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8PodLabelsAndAnnotationsSupplier.externalName;
@@ -115,13 +113,12 @@ public class KubernetesDiscoveryClient implements DiscoveryClient, EnvironmentAw
 	public List<ServiceInstance> getInstances(String serviceId) {
 		Objects.requireNonNull(serviceId);
 
-		List<EndpointSubsetNS> subsetsNS = getEndPointsList(serviceId).stream()
-				.map(Fabric8KubernetesDiscoveryClientUtils::subsetsFromEndpoints).toList();
+		List<Endpoints> allEndpoints = getEndPointsList(serviceId).stream().toList();
 
 		List<ServiceInstance> instances = new ArrayList<>();
-		for (EndpointSubsetNS es : subsetsNS) {
-			// subsetsNS are only those that matched the serviceId
-			instances.addAll(serviceInstances(es, serviceId));
+		for (Endpoints endpoints : allEndpoints) {
+			// endpoints are only those that matched the serviceId
+			instances.addAll(serviceInstances(endpoints, serviceId));
 		}
 
 		if (properties.includeExternalNameServices()) {
@@ -150,26 +147,26 @@ public class KubernetesDiscoveryClient implements DiscoveryClient, EnvironmentAw
 		return endpoints(properties, client, namespaceProvider, "fabric8-discovery", serviceId, adapter.filter());
 	}
 
-	private List<ServiceInstance> serviceInstances(EndpointSubsetNS es, String serviceId) {
+	private List<ServiceInstance> serviceInstances(Endpoints endpoints, String serviceId) {
 
-		List<EndpointSubset> subsets = es.endpointSubset();
+		List<EndpointSubset> subsets = endpoints.getSubsets();
 		if (subsets.isEmpty()) {
 			LOG.debug(() -> "serviceId : " + serviceId + " does not have any subsets");
 			return List.of();
 		}
 
-		String namespace = es.namespace();
+		String namespace = endpoints.getMetadata().getNamespace();
 		List<ServiceInstance> instances = new ArrayList<>();
 
 		Service service = client.services().inNamespace(namespace).withName(serviceId).get();
 		ServiceMetadata serviceMetadata = serviceMetadata(service);
-		Map<String, String> portsData = portsData(subsets);
+		Map<String, Integer> portsData = endpointSubsetsPortData(subsets);
 
 		Map<String, String> serviceInstanceMetadata = serviceInstanceMetadata(portsData, serviceMetadata, properties);
 
 		for (EndpointSubset endpointSubset : subsets) {
 
-			LinkedHashMap<String, Integer> endpointsPortData = endpointSubsetPortsData(endpointSubset);
+			Map<String, Integer> endpointsPortData = endpointSubsetsPortData(List.of(endpointSubset));
 			ServicePortNameAndNumber portData = endpointsPort(endpointsPortData, serviceMetadata, properties);
 
 			List<EndpointAddress> addresses = addresses(endpointSubset, properties);
@@ -189,7 +186,9 @@ public class KubernetesDiscoveryClient implements DiscoveryClient, EnvironmentAw
 
 	@Override
 	public List<String> getServices() {
-		return adapter.apply(client).stream().map(s -> s.getMetadata().getName()).distinct().toList();
+		List<String> services = adapter.apply(client).stream().map(s -> s.getMetadata().getName()).distinct().toList();
+		LOG.debug(() -> "will return services : " + services);
+		return services;
 	}
 
 	@Deprecated(forRemoval = true)

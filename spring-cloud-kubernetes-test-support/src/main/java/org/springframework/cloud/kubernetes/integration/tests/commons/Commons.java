@@ -116,7 +116,7 @@ public final class Commons {
 			LOG.info("appPodName : ->" + appPodName + "<-");
 			// we issue a pollDelay to let the logs sync in, otherwise the results are not
 			// going to be correctly asserted
-			await().pollDelay(20, TimeUnit.SECONDS).pollInterval(Duration.ofSeconds(5)).atMost(Duration.ofSeconds(600))
+			await().pollDelay(20, TimeUnit.SECONDS).pollInterval(Duration.ofSeconds(5)).atMost(Duration.ofSeconds(120))
 					.until(() -> {
 
 						Container.ExecResult result = CONTAINER.execInContainer("sh", "-c",
@@ -158,7 +158,15 @@ public final class Commons {
 			Files.copy(imageStream, imagePath);
 			// import image with ctr. this works because TEMP_FOLDER is mounted in the
 			// container
-			container.execInContainer("ctr", "i", "import", TEMP_FOLDER + "/" + tarName + ".tar");
+			await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+				Container.ExecResult result = container.execInContainer("ctr", "i", "import",
+						TEMP_FOLDER + "/" + tarName + ".tar");
+				boolean noErrors = result.getStderr() == null || result.getStderr().isEmpty();
+				if (!noErrors) {
+					LOG.info("error is : " + result.getStderr());
+				}
+				return noErrors;
+			});
 		}
 
 	}
@@ -227,6 +235,31 @@ public final class Commons {
 		}
 		// not reachable since exception rethrown at runtime
 		return null;
+	}
+
+	/**
+	 * the assumption is that there is only a single pod that is 'Running'.
+	 */
+	public static void waitForLogStatement(String message, K3sContainer k3sContainer, String appLabelValue) {
+		try {
+
+			await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(4)).until(() -> {
+
+				String appPodName = k3sContainer.execInContainer("sh", "-c",
+						"kubectl get pods -l app=" + appLabelValue
+								+ " -o custom-columns=POD:metadata.name,STATUS:status.phase"
+								+ " | grep -i 'running' | awk '{print $1}' | tr -d '\n' ")
+						.getStdout();
+
+				String execResult = k3sContainer.execInContainer("sh", "-c", "kubectl logs " + appPodName.trim())
+						.getStdout();
+				return execResult.contains(message);
+			});
+		}
+		catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
 	}
 
 	/**
