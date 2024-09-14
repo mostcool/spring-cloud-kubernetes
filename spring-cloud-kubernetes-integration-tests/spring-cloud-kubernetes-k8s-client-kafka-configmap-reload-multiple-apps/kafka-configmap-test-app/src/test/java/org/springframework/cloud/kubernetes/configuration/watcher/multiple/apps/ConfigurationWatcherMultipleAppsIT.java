@@ -36,6 +36,7 @@ import reactor.util.retry.Retry;
 import reactor.util.retry.RetryBackoffSpec;
 
 import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
 import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
 import org.springframework.http.HttpMethod;
@@ -77,6 +78,8 @@ class ConfigurationWatcherMultipleAppsIT {
 		Commons.validateImage(CONFIG_WATCHER_APP_B_IMAGE, K3S);
 		Commons.loadSpringCloudKubernetesImage(CONFIG_WATCHER_APP_B_IMAGE, K3S);
 
+		Images.loadKafka(K3S);
+
 		util = new Util(K3S);
 		util.setUp(NAMESPACE);
 	}
@@ -110,12 +113,15 @@ class ConfigurationWatcherMultipleAppsIT {
 
 		// configmap has one label, one that says that we should refresh
 		// and one annotation that says that we should refresh some specific services
-		V1ConfigMap configMap = new V1ConfigMapBuilder().editOrNewMetadata().withName(CONFIG_MAP_NAME)
-				.addToLabels("spring.cloud.kubernetes.config", "true")
-				.addToAnnotations("spring.cloud.kubernetes.configmap.apps",
-						"spring-cloud-kubernetes-client-configuration-watcher-configmap-app-a, "
-								+ "spring-cloud-kubernetes-client-configuration-watcher-configmap-app-b")
-				.endMetadata().addToData("foo", "hello world").build();
+		V1ConfigMap configMap = new V1ConfigMapBuilder().editOrNewMetadata()
+			.withName(CONFIG_MAP_NAME)
+			.addToLabels("spring.cloud.kubernetes.config", "true")
+			.addToAnnotations("spring.cloud.kubernetes.configmap.apps",
+					"spring-cloud-kubernetes-client-configuration-watcher-configmap-app-a, "
+							+ "spring-cloud-kubernetes-client-configuration-watcher-configmap-app-b")
+			.endMetadata()
+			.addToData("foo", "hello world")
+			.build();
 		util.createAndWait(NAMESPACE, configMap, null);
 
 		WebClient.Builder builderA = builder();
@@ -126,8 +132,11 @@ class ConfigurationWatcherMultipleAppsIT {
 
 		Boolean[] valueA = new Boolean[1];
 		await().pollInterval(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(240)).until(() -> {
-			valueA[0] = serviceClientA.method(HttpMethod.GET).retrieve().bodyToMono(Boolean.class)
-					.retryWhen(retrySpec()).block();
+			valueA[0] = serviceClientA.method(HttpMethod.GET)
+				.retrieve()
+				.bodyToMono(Boolean.class)
+				.retryWhen(retrySpec())
+				.block();
 			return valueA[0];
 		});
 
@@ -135,8 +144,11 @@ class ConfigurationWatcherMultipleAppsIT {
 
 		Boolean[] valueB = new Boolean[1];
 		await().pollInterval(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(240)).until(() -> {
-			valueB[0] = serviceClientB.method(HttpMethod.GET).retrieve().bodyToMono(Boolean.class)
-					.retryWhen(retrySpec()).block();
+			valueB[0] = serviceClientB.method(HttpMethod.GET)
+				.retrieve()
+				.bodyToMono(Boolean.class)
+				.retryWhen(retrySpec())
+				.block();
 			return valueB[0];
 		});
 
@@ -148,7 +160,7 @@ class ConfigurationWatcherMultipleAppsIT {
 		V1Deployment deployment = (V1Deployment) util.yaml("app-a/app-a-deployment.yaml");
 		V1Service service = (V1Service) util.yaml("app-a/app-a-service.yaml");
 		V1Ingress ingress = (V1Ingress) util
-				.yaml("ingress/spring-cloud-kubernetes-configuration-watcher-multiple-apps-ingress.yaml");
+			.yaml("ingress/spring-cloud-kubernetes-configuration-watcher-multiple-apps-ingress.yaml");
 
 		if (phase.equals(Phase.CREATE)) {
 			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
@@ -172,9 +184,9 @@ class ConfigurationWatcherMultipleAppsIT {
 
 	private void configWatcher(Phase phase) {
 		V1Deployment deployment = (V1Deployment) util
-				.yaml("config-watcher/spring-cloud-kubernetes-configuration-watcher-bus-kafka-deployment.yaml");
+			.yaml("config-watcher/spring-cloud-kubernetes-configuration-watcher-bus-kafka-deployment.yaml");
 		V1Service service = (V1Service) util
-				.yaml("config-watcher/spring-cloud-kubernetes-configuration-watcher-service.yaml");
+			.yaml("config-watcher/spring-cloud-kubernetes-configuration-watcher-service.yaml");
 
 		if (phase.equals(Phase.CREATE)) {
 			util.createAndWait(NAMESPACE, null, deployment, service, null, true);

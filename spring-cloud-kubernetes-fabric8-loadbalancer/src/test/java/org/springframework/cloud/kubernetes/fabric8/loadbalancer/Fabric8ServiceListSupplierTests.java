@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,23 +53,23 @@ class Fabric8ServiceListSupplierTests {
 
 	@SuppressWarnings("unchecked")
 	private final MixedOperation<Service, ServiceList, ServiceResource<Service>> serviceOperation = Mockito
-			.mock(MixedOperation.class);
+		.mock(MixedOperation.class);
 
 	@SuppressWarnings("unchecked")
 	private final NonNamespaceOperation<Service, ServiceList, ServiceResource<Service>> namespaceOperation = Mockito
-			.mock(NonNamespaceOperation.class);
+		.mock(NonNamespaceOperation.class);
 
 	@SuppressWarnings("unchecked")
 	private final ServiceResource<Service> serviceResource = Mockito.mock(ServiceResource.class);
 
 	@SuppressWarnings("unchecked")
 	private final AnyNamespaceOperation<Service, ServiceList, ServiceResource<Service>> multiDeletable = Mockito
-			.mock(AnyNamespaceOperation.class);
+		.mock(AnyNamespaceOperation.class);
 
 	@Test
 	void testPositiveMatch() {
 		when(mapper.map(any(Service.class)))
-				.thenReturn(new DefaultKubernetesServiceInstance("", "", "", 0, null, false));
+			.thenReturn(new DefaultKubernetesServiceInstance("", "", "", 0, null, false));
 		when(this.client.getNamespace()).thenReturn("test");
 		when(this.client.services()).thenReturn(this.serviceOperation);
 		when(this.serviceOperation.inNamespace("test")).thenReturn(namespaceOperation);
@@ -78,14 +78,13 @@ class Fabric8ServiceListSupplierTests {
 		KubernetesServicesListSupplier<Service> supplier = new Fabric8ServicesListSupplier(environment, client, mapper,
 				KubernetesDiscoveryProperties.DEFAULT);
 		List<ServiceInstance> instances = supplier.get().blockFirst();
-		assert instances != null;
 		Assertions.assertEquals(1, instances.size());
 	}
 
 	@Test
 	void testPositiveMatchAllNamespaces() {
 		when(mapper.map(any(Service.class)))
-				.thenReturn(new DefaultKubernetesServiceInstance("", "", "", 0, null, false));
+			.thenReturn(new DefaultKubernetesServiceInstance("", "", "", 0, null, false));
 		when(this.client.services()).thenReturn(this.serviceOperation);
 		when(this.serviceOperation.inAnyNamespace()).thenReturn(this.multiDeletable);
 		when(this.multiDeletable.withField("metadata.name", "test-service")).thenReturn(this.multiDeletable);
@@ -98,13 +97,19 @@ class Fabric8ServiceListSupplierTests {
 		KubernetesServicesListSupplier<Service> supplier = new Fabric8ServicesListSupplier(environment, client, mapper,
 				discoveryProperties);
 		List<ServiceInstance> instances = supplier.get().blockFirst();
-		assert instances != null;
 		Assertions.assertEquals(1, instances.size());
 	}
 
 	private Service buildService(String name, int port) {
-		return new ServiceBuilder().withNewMetadata().withName(name).endMetadata().withNewSpec().addNewPort()
-				.withPort(port).endPort().endSpec().build();
+		return new ServiceBuilder().withNewMetadata()
+			.withName(name)
+			.endMetadata()
+			.withNewSpec()
+			.addNewPort()
+			.withPort(port)
+			.endPort()
+			.endSpec()
+			.build();
 	}
 
 }

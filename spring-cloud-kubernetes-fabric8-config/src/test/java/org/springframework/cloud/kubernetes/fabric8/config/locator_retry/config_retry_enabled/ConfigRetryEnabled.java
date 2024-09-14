@@ -27,7 +27,9 @@ import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapPropertySourceLocator;
+import org.springframework.cloud.kubernetes.fabric8.config.TestApplication;
 import org.springframework.core.env.PropertySource;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -40,6 +42,11 @@ import static org.mockito.Mockito.verify;
 /**
  * @author Isik Erhan
  */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+		properties = { "spring.cloud.kubernetes.secrets.enabled=false",
+				"spring.cloud.kubernetes.client.namespace=default", "spring.cloud.kubernetes.config.fail-fast=true",
+				"spring.cloud.kubernetes.config.retry.max-attempts=5", "spring.main.cloud-platform=KUBERNETES" },
+		classes = TestApplication.class)
 abstract class ConfigRetryEnabled {
 
 	private static final String API = "/api/v1/namespaces/default/configmaps";
@@ -73,10 +80,17 @@ abstract class ConfigRetryEnabled {
 		data.put("some.number", "0");
 
 		// return config map without failing
-		mockServer
-				.expect().withPath(API).andReturn(200, new ConfigMapListBuilder().withItems(new ConfigMapBuilder()
-						.withNewMetadata().withName("application").endMetadata().addToData(data).build()).build())
-				.once();
+		mockServer.expect()
+			.withPath(API)
+			.andReturn(200,
+					new ConfigMapListBuilder()
+						.withItems(new ConfigMapBuilder().withNewMetadata()
+							.withName("application")
+							.endMetadata()
+							.addToData(data)
+							.build())
+						.build())
+			.once();
 
 		PropertySource<?> propertySource = Assertions.assertDoesNotThrow(() -> psl.locate(new MockEnvironment()));
 
@@ -96,10 +110,17 @@ abstract class ConfigRetryEnabled {
 
 		// fail 3 times then succeed at the 4th call
 		mockServer.expect().withPath(API).andReturn(500, "Internal Server Error").times(3);
-		mockServer
-				.expect().withPath(API).andReturn(200, new ConfigMapListBuilder().withItems(new ConfigMapBuilder()
-						.withNewMetadata().withName("application").endMetadata().addToData(data).build()).build())
-				.once();
+		mockServer.expect()
+			.withPath(API)
+			.andReturn(200,
+					new ConfigMapListBuilder()
+						.withItems(new ConfigMapBuilder().withNewMetadata()
+							.withName("application")
+							.endMetadata()
+							.addToData(data)
+							.build())
+						.build())
+			.once();
 
 		PropertySource<?> propertySource = Assertions.assertDoesNotThrow(() -> psl.locate(new MockEnvironment()));
 
@@ -117,7 +138,7 @@ abstract class ConfigRetryEnabled {
 		mockServer.expect().withPath(API).andReturn(500, "Internal Server Error").times(5);
 
 		assertThatThrownBy(() -> psl.locate(new MockEnvironment())).isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("api/v1/namespaces/default/configmaps. Message: Internal Server Error");
+			.hasMessageContaining("api/v1/namespaces/default/configmaps. Message: Internal Server Error");
 
 		// verify retried 5 times until failure
 		verify(verifiablePsl, times(5)).locate(any());

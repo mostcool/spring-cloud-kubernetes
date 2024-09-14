@@ -28,7 +28,9 @@ import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.kubernetes.commons.config.SecretsPropertySourceLocator;
+import org.springframework.cloud.kubernetes.fabric8.config.TestApplication;
 import org.springframework.core.env.PropertySource;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -41,6 +43,13 @@ import static org.mockito.Mockito.verify;
 /**
  * @author Isik Erhan
  */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+		properties = { "spring.cloud.kubernetes.config.enabled=false", "spring.cloud.kubernetes.secrets.enabled=true",
+				"spring.cloud.kubernetes.client.namespace=default", "spring.cloud.kubernetes.secrets.fail-fast=true",
+				"spring.cloud.kubernetes.secrets.retry.max-attempts=5",
+				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enable-api=true",
+				"spring.main.cloud-platform=KUBERNETES" },
+		classes = TestApplication.class)
 abstract class SecretsRetryEnabled {
 
 	private static final String API = "/api/v1/namespaces/default/secrets";
@@ -73,9 +82,12 @@ abstract class SecretsRetryEnabled {
 		data.put("some.sensitive.number", Base64.getEncoder().encodeToString("1".getBytes()));
 
 		// return secret without failing
-		mockServer.expect().withPath(API).andReturn(200, new SecretListBuilder().withItems(
-				new SecretBuilder().withNewMetadata().withName("my-secret").endMetadata().addToData(data).build())
-				.build()).once();
+		mockServer.expect()
+			.withPath(API)
+			.andReturn(200, new SecretListBuilder().withItems(
+					new SecretBuilder().withNewMetadata().withName("my-secret").endMetadata().addToData(data).build())
+				.build())
+			.once();
 
 		PropertySource<?> propertySource = Assertions.assertDoesNotThrow(() -> psl.locate(new MockEnvironment()));
 
@@ -96,9 +108,12 @@ abstract class SecretsRetryEnabled {
 		// fail 3 times then succeed at the 4th call
 		mockServer.expect().withPath(API).andReturn(500, "Internal Server Error").times(3);
 
-		mockServer.expect().withPath(API).andReturn(200, new SecretListBuilder().withItems(
-				new SecretBuilder().withNewMetadata().withName("my-secret").endMetadata().addToData(data).build())
-				.build()).once();
+		mockServer.expect()
+			.withPath(API)
+			.andReturn(200, new SecretListBuilder().withItems(
+					new SecretBuilder().withNewMetadata().withName("my-secret").endMetadata().addToData(data).build())
+				.build())
+			.once();
 
 		PropertySource<?> propertySource = Assertions.assertDoesNotThrow(() -> psl.locate(new MockEnvironment()));
 
@@ -116,7 +131,7 @@ abstract class SecretsRetryEnabled {
 		mockServer.expect().withPath(API).andReturn(500, "Internal Server Error").times(5);
 
 		assertThatThrownBy(() -> psl.locate(new MockEnvironment())).isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("api/v1/namespaces/default/secrets. Message: Internal Server Error.");
+			.hasMessageContaining("api/v1/namespaces/default/secrets. Message: Internal Server Error.");
 
 		// verify retried 5 times until failure
 		verify(verifiablePsl, times(5)).locate(any());

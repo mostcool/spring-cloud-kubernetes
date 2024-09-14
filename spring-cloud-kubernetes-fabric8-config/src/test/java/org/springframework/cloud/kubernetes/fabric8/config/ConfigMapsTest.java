@@ -31,6 +31,8 @@ import org.springframework.cloud.kubernetes.commons.config.NormalizedSource;
 import org.springframework.mock.env.MockEnvironment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.cloud.kubernetes.commons.config.Constants.APPLICATION_PROPERTIES;
+import static org.springframework.cloud.kubernetes.commons.config.Constants.APPLICATION_YAML;
 
 /**
  * @author Charles Moulliard
@@ -46,9 +48,11 @@ class ConfigMapsTest {
 	}
 
 	@Test
-	public void testConfigMapList() {
-		mockClient.configMaps().inNamespace("ns1")
-				.resource(new ConfigMapBuilder().withNewMetadata().withName("empty").endMetadata().build()).create();
+	void testConfigMapList() {
+		mockClient.configMaps()
+			.inNamespace("ns1")
+			.resource(new ConfigMapBuilder().withNewMetadata().withName("empty").endMetadata().build())
+			.create();
 
 		ConfigMapList configMapList = mockClient.configMaps().inNamespace("ns1").list();
 		assertThat(configMapList).isNotNull();
@@ -60,8 +64,11 @@ class ConfigMapsTest {
 	@Test
 	void testConfigMapGet() {
 
-		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata().withName("reload-example").endMetadata()
-				.addToData("KEY", "123").build();
+		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata()
+			.withName("reload-example")
+			.endMetadata()
+			.addToData("KEY", "123")
+			.build();
 
 		mockClient.configMaps().inNamespace("ns2").resource(configMap).create();
 
@@ -76,9 +83,11 @@ class ConfigMapsTest {
 	@Test
 	void testConfigMapFromSingleApplicationProperties() {
 		String configMapName = "app-properties-test";
-		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata()
-				.addToData("application.properties", ConfigMapTestUtil.readResourceFile("application.properties"))
-				.build();
+		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata()
+			.withName(configMapName)
+			.endMetadata()
+			.addToData(APPLICATION_PROPERTIES, ConfigMapTestUtil.readResourceFile(APPLICATION_PROPERTIES))
+			.build();
 
 		mockClient.configMaps().inNamespace("test").resource(configMap).create();
 		NormalizedSource source = new NamedConfigMapNormalizedSource(configMapName, "test", false, false);
@@ -94,8 +103,11 @@ class ConfigMapsTest {
 	@Test
 	void testConfigMapFromSingleApplicationYaml() {
 		String configMapName = "app-yaml-test";
-		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata()
-				.addToData("application.yaml", ConfigMapTestUtil.readResourceFile("application.yaml")).build();
+		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata()
+			.withName(configMapName)
+			.endMetadata()
+			.addToData(APPLICATION_YAML, ConfigMapTestUtil.readResourceFile(APPLICATION_YAML))
+			.build();
 
 		mockClient.configMaps().inNamespace("test").resource(configMap).create();
 		NormalizedSource source = new NamedConfigMapNormalizedSource(configMapName, "test", false, false);
@@ -111,8 +123,11 @@ class ConfigMapsTest {
 	@Test
 	void testConfigMapFromSingleNonStandardFileName() {
 		String configMapName = "single-non-standard-test";
-		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata()
-				.addToData("adhoc.yml", ConfigMapTestUtil.readResourceFile("adhoc.yml")).build();
+		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata()
+			.withName(configMapName)
+			.endMetadata()
+			.addToData("adhoc.yml", ConfigMapTestUtil.readResourceFile("adhoc.yml"))
+			.build();
 
 		mockClient.configMaps().inNamespace("test").resource(configMap).create();
 		NormalizedSource source = new NamedConfigMapNormalizedSource(configMapName, "test", false, false);
@@ -128,8 +143,11 @@ class ConfigMapsTest {
 	@Test
 	void testConfigMapFromSingleInvalidPropertiesContent() {
 		String configMapName = "single-unparseable-properties-test";
-		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata()
-				.addToData("application.properties", "somevalue").build();
+		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata()
+			.withName(configMapName)
+			.endMetadata()
+			.addToData(APPLICATION_PROPERTIES, "somevalue")
+			.build();
 
 		mockClient.configMaps().inNamespace("test").resource(configMap).create();
 		NormalizedSource source = new NamedConfigMapNormalizedSource(configMapName, "namespace", false, false);
@@ -143,8 +161,11 @@ class ConfigMapsTest {
 	@Test
 	void testConfigMapFromSingleInvalidYamlContent() {
 		String configMapName = "single-unparseable-yaml-test";
-		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata()
-				.addToData("application.yaml", "somevalue").build();
+		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata()
+			.withName(configMapName)
+			.endMetadata()
+			.addToData(APPLICATION_YAML, "somevalue")
+			.build();
 
 		mockClient.configMaps().inNamespace("test").resource(configMap).create();
 		NormalizedSource source = new NamedConfigMapNormalizedSource(configMapName, "namespace", false, false);
@@ -158,9 +179,12 @@ class ConfigMapsTest {
 	@Test
 	void testConfigMapFromMultipleApplicationProperties() {
 		String configMapName = "app-multiple-properties-test";
-		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata().withName(configMapName).endMetadata()
-				.addToData("application.properties", ConfigMapTestUtil.readResourceFile("application.properties"))
-				.addToData("adhoc.properties", ConfigMapTestUtil.readResourceFile("adhoc.properties")).build();
+		ConfigMap configMap = new ConfigMapBuilder().withNewMetadata()
+			.withName(configMapName)
+			.endMetadata()
+			.addToData(APPLICATION_PROPERTIES, ConfigMapTestUtil.readResourceFile(APPLICATION_PROPERTIES))
+			.addToData("adhoc.properties", ConfigMapTestUtil.readResourceFile("adhoc.properties"))
+			.build();
 
 		mockClient.configMaps().inNamespace("test").resource(configMap).create();
 		NormalizedSource source = new NamedConfigMapNormalizedSource(configMapName, "test", false, false);

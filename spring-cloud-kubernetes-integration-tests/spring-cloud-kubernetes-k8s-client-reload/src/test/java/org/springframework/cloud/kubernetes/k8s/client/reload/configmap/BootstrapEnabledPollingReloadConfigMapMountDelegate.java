@@ -24,6 +24,7 @@ import io.kubernetes.client.openapi.models.V1ConfigMap;
 import org.junit.jupiter.api.Assertions;
 import org.testcontainers.k3s.K3sContainer;
 
+import org.springframework.cloud.kubernetes.commons.config.Constants;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
 import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
 import org.springframework.http.HttpMethod;
@@ -68,8 +69,11 @@ final class BootstrapEnabledPollingReloadConfigMapMountDelegate {
 
 		// (3)
 		WebClient webClient = K8sClientConfigMapReloadITUtil.builder().baseUrl("http://localhost/mount").build();
-		String result = webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
-				.retryWhen(K8sClientConfigMapReloadITUtil.retrySpec()).block();
+		String result = webClient.method(HttpMethod.GET)
+			.retrieve()
+			.bodyToMono(String.class)
+			.retryWhen(K8sClientConfigMapReloadITUtil.retrySpec())
+			.block();
 
 		// we first read the initial value from the configmap
 		Assertions.assertEquals("as-mount-initial", result);
@@ -77,13 +81,17 @@ final class BootstrapEnabledPollingReloadConfigMapMountDelegate {
 		// replace data in configmap and wait for k8s to pick it up
 		// our polling will detect that and restart the app
 		V1ConfigMap configMap = (V1ConfigMap) util.yaml("configmap-mount.yaml");
-		configMap.setData(Map.of("application.properties", "from.properties.key=as-mount-changed"));
+		configMap.setData(Map.of(Constants.APPLICATION_PROPERTIES, "from.properties.key=as-mount-changed"));
 		new CoreV1Api().replaceNamespacedConfigMap("poll-reload-as-mount", NAMESPACE, configMap, null, null, null,
 				null);
 
 		await().timeout(Duration.ofSeconds(180))
-				.until(() -> webClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
-						.retryWhen(K8sClientConfigMapReloadITUtil.retrySpec()).block().equals("as-mount-changed"));
+			.until(() -> webClient.method(HttpMethod.GET)
+				.retrieve()
+				.bodyToMono(String.class)
+				.retryWhen(K8sClientConfigMapReloadITUtil.retrySpec())
+				.block()
+				.equals("as-mount-changed"));
 
 	}
 

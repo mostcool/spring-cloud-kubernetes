@@ -179,13 +179,13 @@ class ConfigUtilsTests {
 	void testMerge() {
 
 		StrippedSourceContainer configMapOne = new StrippedSourceContainer(Map.of(), "configmap-one",
-				Map.of("application.yaml", "propA: A\npropB: B"));
+				Map.of(Constants.APPLICATION_YAML, "propA: A\npropB: B"));
 
 		StrippedSourceContainer configMapOneK8s = new StrippedSourceContainer(Map.of(), "configmap-one-kubernetes",
-				Map.of("application.yaml", "propA: AA\npropC: C"));
+				Map.of(Constants.APPLICATION_YAML, "propA: AA\npropC: C"));
 
 		LinkedHashSet<String> sourceNames = Stream.of("configmap-one", "configmap-one-kubernetes")
-				.collect(Collectors.toCollection(LinkedHashSet::new));
+			.collect(Collectors.toCollection(LinkedHashSet::new));
 
 		MultipleSourcesContainer result = ConfigUtils.processNamedData(List.of(configMapOne, configMapOneK8s),
 				new MockEnvironment(), sourceNames, "default", false);

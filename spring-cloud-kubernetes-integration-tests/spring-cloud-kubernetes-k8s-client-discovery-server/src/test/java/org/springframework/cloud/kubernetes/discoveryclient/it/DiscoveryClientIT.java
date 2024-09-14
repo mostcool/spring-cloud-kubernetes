@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import reactor.util.retry.RetryBackoffSpec;
 
 import org.springframework.boot.test.json.BasicJsonTester;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
 import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
 import org.springframework.http.HttpMethod;
@@ -153,6 +154,8 @@ class DiscoveryClientIT {
 		Commons.validateImage(SPRING_CLOUD_K8S_DISCOVERY_CLIENT_APP_NAME, K3S);
 		Commons.loadSpringCloudKubernetesImage(SPRING_CLOUD_K8S_DISCOVERY_CLIENT_APP_NAME, K3S);
 
+		Images.loadWiremock(K3S);
+
 		util = new Util(K3S);
 		rbacApi = new RbacAuthorizationV1Api();
 		util.setUp(NAMESPACE);
@@ -161,7 +164,7 @@ class DiscoveryClientIT {
 		util.createNamespace(NAMESPACE_RIGHT);
 
 		clusterRoleBinding = (V1ClusterRoleBinding) util
-				.yaml("namespace-filter/cluster-admin-serviceaccount-role.yaml");
+			.yaml("namespace-filter/cluster-admin-serviceaccount-role.yaml");
 		rbacApi.createClusterRoleBinding(clusterRoleBinding, null, null, null, null);
 
 		util.wiremock(NAMESPACE_LEFT, "/wiremock-" + NAMESPACE_LEFT, Phase.CREATE, false);
@@ -207,11 +210,15 @@ class DiscoveryClientIT {
 		WebClient.Builder builder = builder();
 		WebClient serviceClient = builder.baseUrl("http://localhost:80/discoveryclient-it/services").build();
 
-		String result = serviceClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
-				.block();
+		String result = serviceClient.method(HttpMethod.GET)
+			.retrieve()
+			.bodyToMono(String.class)
+			.retryWhen(retrySpec())
+			.block();
 
-		Assertions.assertThat(BASIC_JSON_TESTER.from(result)).extractingJsonPathArrayValue("$")
-				.contains("spring-cloud-kubernetes-discoveryserver");
+		Assertions.assertThat(BASIC_JSON_TESTER.from(result))
+			.extractingJsonPathArrayValue("$")
+			.contains("spring-cloud-kubernetes-discoveryserver");
 
 		// since 'spring.cloud.kubernetes.http.discovery.client.catalog.watcher.enabled'
 		// is false by default, we will not receive any heartbeat events,
@@ -223,8 +230,11 @@ class DiscoveryClientIT {
 
 		WebClient.Builder stateBuilder = builder();
 		WebClient client = stateBuilder.baseUrl("http://localhost:80/discoveryclient-it/state").build();
-		String stateResult = client.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
-				.block();
+		String stateResult = client.method(HttpMethod.GET)
+			.retrieve()
+			.bodyToMono(String.class)
+			.retryWhen(retrySpec())
+			.block();
 		Assertions.assertThat(BASIC_JSON_TESTER.from(stateResult)).isEqualTo("[]");
 
 		try {
@@ -234,27 +244,46 @@ class DiscoveryClientIT {
 			throw new RuntimeException(e);
 		}
 
-		String stateResultAfter10Seconds = client.method(HttpMethod.GET).retrieve().bodyToMono(String.class)
-				.retryWhen(retrySpec()).block();
+		String stateResultAfter10Seconds = client.method(HttpMethod.GET)
+			.retrieve()
+			.bodyToMono(String.class)
+			.retryWhen(retrySpec())
+			.block();
 		Assertions.assertThat(BASIC_JSON_TESTER.from(stateResultAfter10Seconds)).isEqualTo("[]");
 	}
 
 	void testHealth() {
-		WebClient.Builder builder = builder();
-		WebClient serviceClient = builder.baseUrl("http://localhost:80/discoveryclient-it/actuator/health").build();
+		WebClient.Builder clientBuilder = builder();
+		WebClient.Builder serverBuilder = builder();
 
-		String health = serviceClient.method(HttpMethod.GET).retrieve().bodyToMono(String.class).retryWhen(retrySpec())
-				.block();
+		WebClient client = clientBuilder.baseUrl("http://localhost:80/discoveryclient-it/actuator/health").build();
+		WebClient server = serverBuilder.baseUrl("http://localhost:80/actuator/health").build();
 
-		Assertions.assertThat(BASIC_JSON_TESTER.from(health))
-				.extractingJsonPathStringValue("$.components.discoveryComposite.status").isEqualTo("UP");
+		String clientHealth = client.method(HttpMethod.GET)
+			.retrieve()
+			.bodyToMono(String.class)
+			.retryWhen(retrySpec())
+			.block();
+		String serverHealth = server.method(HttpMethod.GET)
+			.retrieve()
+			.bodyToMono(String.class)
+			.retryWhen(retrySpec())
+			.block();
+
+		Assertions.assertThat(BASIC_JSON_TESTER.from(clientHealth))
+			.extractingJsonPathStringValue("$.components.discoveryComposite.status")
+			.isEqualTo("UP");
+
+		Assertions.assertThat(BASIC_JSON_TESTER.from(serverHealth))
+			.extractingJsonPathStringValue("$.components.kubernetes.status")
+			.isEqualTo("UP");
 	}
 
 	private static void discoveryClient(Phase phase) {
 		V1Deployment deployment = (V1Deployment) util
-				.yaml("client/spring-cloud-kubernetes-discoveryclient-it-deployment.yaml");
+			.yaml("client/spring-cloud-kubernetes-discoveryclient-it-deployment.yaml");
 		V1Service service = (V1Service) util.yaml("client/spring-cloud-kubernetes-discoveryclient-it-service.yaml");
-		V1Ingress ingress = (V1Ingress) util.yaml("client/spring-cloud-kubernetes-discoveryclient-it-ingress.yaml");
+		V1Ingress ingress = (V1Ingress) util.yaml("ingress.yaml");
 
 		if (phase.equals(Phase.CREATE)) {
 			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
@@ -266,15 +295,14 @@ class DiscoveryClientIT {
 
 	private static void discoveryServer(Phase phase) {
 		V1Deployment deployment = (V1Deployment) util
-				.yaml("server/spring-cloud-kubernetes-discoveryserver-deployment.yaml");
+			.yaml("server/spring-cloud-kubernetes-discoveryserver-deployment.yaml");
 		V1Service service = (V1Service) util.yaml("server/spring-cloud-kubernetes-discoveryserver-service.yaml");
-		V1Ingress ingress = (V1Ingress) util.yaml("server/spring-cloud-kubernetes-discoveryserver-ingress.yaml");
 
 		if (phase.equals(Phase.CREATE)) {
-			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
+			util.createAndWait(NAMESPACE, null, deployment, service, null, true);
 		}
 		else {
-			util.deleteAndWait(NAMESPACE, deployment, service, ingress);
+			util.deleteAndWait(NAMESPACE, deployment, service, null);
 		}
 	}
 

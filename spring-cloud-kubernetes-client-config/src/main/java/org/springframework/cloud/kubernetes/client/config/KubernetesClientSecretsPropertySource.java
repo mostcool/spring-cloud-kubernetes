@@ -29,6 +29,7 @@ import org.springframework.cloud.kubernetes.commons.config.SourceData;
  */
 public class KubernetesClientSecretsPropertySource extends SecretsPropertySource {
 
+	@Deprecated(forRemoval = true)
 	public KubernetesClientSecretsPropertySource(SourceData sourceData) {
 		super(sourceData);
 	}
@@ -47,8 +48,9 @@ public class KubernetesClientSecretsPropertySource extends SecretsPropertySource
 
 	private static SourceData getSourceData(KubernetesClientConfigContext context) {
 		NormalizedSourceType type = context.normalizedSource().type();
-		return Optional.ofNullable(STRATEGIES.get(type)).map(x -> x.apply(context))
-				.orElseThrow(() -> new IllegalArgumentException("no strategy found for : " + type));
+		return Optional.ofNullable(STRATEGIES.get(type))
+			.map(x -> x.apply(context))
+			.orElseThrow(() -> new IllegalArgumentException("no strategy found for : " + type));
 	}
 
 	private static KubernetesClientContextToSourceData namedSecret() {

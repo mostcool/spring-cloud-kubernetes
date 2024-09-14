@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.springframework.cloud</groupId>
 		<artifactId>spring-cloud-kubernetes</artifactId>
-		<version>3.1.1-SNAPSHOT</version>
+		<version>3.2.0-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>spring-cloud-kubernetes-integration-tests</artifactId>
@@ -18,11 +18,12 @@
 	<properties>
 		<java.version>17</java.version>
 		<docker-java.version>3.2.13</docker-java.version>
-		<testcontainers.version>1.18.0</testcontainers.version>
+		<testcontainers.version>1.18.3</testcontainers.version>
 	</properties>
 
 	<build>
 		<plugins>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-deploy-plugin</artifactId>
@@ -48,7 +49,7 @@
 						</configuration>
 						<phase>package</phase>
 						<goals>
-							<goal>build-image</goal>
+							<goal>build-image-no-fork</goal>
 						</goals>
 					</execution>
 					<execution>
@@ -128,14 +129,11 @@
 		<!-- configuration watcher is based on k8s-client, there's no fabric8 counterpart -->
 		<module>spring-cloud-kubernetes-k8s-client-configuration-watcher</module>
 
-		<!-- at the moment we have no integration test for the fabric8 client, only k8s native client -->
-		<module>spring-cloud-kubernetes-k8s-client-loadbalancer</module>
-
 		<!-- config watcher reload, using kafka and configmap -->
         <module>spring-cloud-kubernetes-k8s-client-kafka-configmap-reload-multiple-apps</module>
 
 		<!-- config watcher reload, using rabbitmq and secret -->
         <module>spring-cloud-kubernetes-k8s-client-rabbitmq-secret-reload-multiple-apps</module>
 
-    </modules>
+	</modules>
 </project>

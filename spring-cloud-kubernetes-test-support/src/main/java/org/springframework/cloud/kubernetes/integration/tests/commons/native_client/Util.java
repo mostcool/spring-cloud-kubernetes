@@ -60,6 +60,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.testcontainers.k3s.K3sContainer;
 
+import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
 
 import static org.awaitility.Awaitility.await;
@@ -119,11 +120,19 @@ public final class Util {
 			coreV1Api.createNamespacedService(namespace, service, null, null, null, null);
 
 			if (deployment != null) {
-				String imageFromDeployment = deployment.getSpec().getTemplate().getSpec().getContainers().get(0)
-						.getImage();
+				String imageFromDeployment = deployment.getSpec()
+					.getTemplate()
+					.getSpec()
+					.getContainers()
+					.get(0)
+					.getImage();
 				if (changeVersion) {
-					deployment.getSpec().getTemplate().getSpec().getContainers().get(0)
-							.setImage(imageFromDeployment + ":" + pomVersion());
+					deployment.getSpec()
+						.getTemplate()
+						.getSpec()
+						.getContainers()
+						.get(0)
+						.setImage(imageFromDeployment + ":" + pomVersion());
 				}
 				else {
 					String[] image = imageFromDeployment.split(":", 2);
@@ -203,7 +212,10 @@ public final class Util {
 			try {
 				String deploymentName = deploymentName(deployment);
 				Map<String, String> podLabels = appsV1Api.readNamespacedDeployment(deploymentName, namespace, null)
-						.getSpec().getTemplate().getMetadata().getLabels();
+					.getSpec()
+					.getTemplate()
+					.getMetadata()
+					.getLabels();
 				appsV1Api.deleteNamespacedDeployment(deploymentName, namespace, null, null, null, null, null, null);
 				coreV1Api.deleteCollectionNamespacedPod(namespace, null, null, null, null, null,
 						labelSelector(podLabels), null, null, null, null, null, null, null, null);
@@ -233,6 +245,11 @@ public final class Util {
 
 	public void busybox(String namespace, Phase phase) {
 		V1Deployment deployment = (V1Deployment) yaml("busybox/deployment.yaml");
+
+		String imageWithoutVersion = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage();
+		String imageWithVersion = imageWithoutVersion + ":" + Images.busyboxVersion();
+		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(imageWithVersion);
+
 		V1Service service = (V1Service) yaml("busybox/service.yaml");
 		if (phase.equals(Phase.CREATE)) {
 			createAndWait(namespace, "busybox", deployment, service, null, false);
@@ -244,6 +261,11 @@ public final class Util {
 
 	public void kafka(String namespace, Phase phase) {
 		V1Deployment deployment = (V1Deployment) yaml("kafka/kafka-deployment.yaml");
+
+		String imageWithoutVersion = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage();
+		String imageWithVersion = imageWithoutVersion + ":" + Images.kafkaVersion();
+		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(imageWithVersion);
+
 		V1Service service = (V1Service) yaml("kafka/kafka-service.yaml");
 		V1ConfigMap configMap = (V1ConfigMap) yaml("kafka/kafka-configmap-startup-script.yaml");
 
@@ -259,6 +281,11 @@ public final class Util {
 
 	public void rabbitMq(String namespace, Phase phase) {
 		V1Deployment deployment = (V1Deployment) yaml("rabbitmq/rabbitmq-deployment.yaml");
+
+		String imageWithoutVersion = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage();
+		String imageWithVersion = imageWithoutVersion + ":" + Images.rabbitMqVersion();
+		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(imageWithVersion);
+
 		V1Service service = (V1Service) yaml("rabbitmq/rabbitmq-service.yaml");
 
 		if (phase.equals(Phase.CREATE)) {
@@ -275,7 +302,7 @@ public final class Util {
 	public Object yaml(String fileName) {
 		ClassLoader classLoader = Util.class.getClassLoader();
 		String file = new BufferedReader(new InputStreamReader(classLoader.getResourceAsStream(fileName))).lines()
-				.collect(Collectors.joining("\n"));
+			.collect(Collectors.joining("\n"));
 		try {
 			return Yaml.load(file);
 		}
@@ -289,9 +316,9 @@ public final class Util {
 		try {
 			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("setup/service-account.yaml");
 			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api
-					.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), namespace, null);
+				.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), namespace, null);
 			CheckedSupplier<V1ServiceAccount> accountDefaulter = () -> coreV1Api
-					.createNamespacedServiceAccount(namespace, serviceAccount, null, null, null, null);
+				.createNamespacedServiceAccount(namespace, serviceAccount, null, null, null, null);
 			notExistsHandler(accountSupplier, accountDefaulter);
 
 			V1RoleBinding roleBinding = (V1RoleBinding) yaml("setup/role-binding.yaml");
@@ -313,10 +340,10 @@ public final class Util {
 
 		try {
 			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("cluster/service-account.yaml");
-			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api.readNamespacedServiceAccount(
-					serviceAccount.getMetadata().getName(), serviceAccountNamespace, null);
+			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api
+				.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace, null);
 			CheckedSupplier<V1ServiceAccount> accountDefaulter = () -> coreV1Api
-					.createNamespacedServiceAccount(serviceAccountNamespace, serviceAccount, null, null, null, null);
+				.createNamespacedServiceAccount(serviceAccountNamespace, serviceAccount, null, null, null, null);
 			notExistsHandler(accountSupplier, accountDefaulter);
 
 			V1ClusterRole clusterRole = (V1ClusterRole) yaml("cluster/cluster-role.yaml");
@@ -356,10 +383,10 @@ public final class Util {
 
 		try {
 			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("cluster/service-account.yaml");
-			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api.readNamespacedServiceAccount(
-					serviceAccount.getMetadata().getName(), serviceAccountNamespace, null);
+			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api
+				.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace, null);
 			CheckedSupplier<V1ServiceAccount> accountDefaulter = () -> coreV1Api
-					.createNamespacedServiceAccount(serviceAccountNamespace, serviceAccount, null, null, null, null);
+				.createNamespacedServiceAccount(serviceAccountNamespace, serviceAccount, null, null, null, null);
 			notExistsHandler(accountSupplier, accountDefaulter);
 
 			V1ClusterRole clusterRole = (V1ClusterRole) yaml("cluster/cluster-role.yaml");
@@ -419,9 +446,12 @@ public final class Util {
 			throw new RuntimeException(e);
 		}
 
-		await().pollInterval(Duration.ofSeconds(1)).atMost(30, TimeUnit.SECONDS)
-				.until(() -> coreV1Api.listNamespace(null, null, null, null, null, null, null, null, null, null, null)
-						.getItems().stream().noneMatch(x -> x.getMetadata().getName().equals(name)));
+		await().pollInterval(Duration.ofSeconds(1))
+			.atMost(30, TimeUnit.SECONDS)
+			.until(() -> coreV1Api.listNamespace(null, null, null, null, null, null, null, null, null, null, null)
+				.getItems()
+				.stream()
+				.noneMatch(x -> x.getMetadata().getName().equals(name)));
 	}
 
 	public void wiremock(String namespace, String path, Phase phase) {
@@ -430,6 +460,11 @@ public final class Util {
 
 	public void wiremock(String namespace, String path, Phase phase, boolean withIngress) {
 		V1Deployment deployment = (V1Deployment) yaml("wiremock/wiremock-deployment.yaml");
+
+		String imageWithoutVersion = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getImage();
+		String imageWithVersion = imageWithoutVersion + ":" + Images.wiremockVersion();
+		deployment.getSpec().getTemplate().getSpec().getContainers().get(0).setImage(imageWithVersion);
+
 		V1Service service = (V1Service) yaml("wiremock/wiremock-service.yaml");
 
 		V1Ingress ingress = null;
@@ -512,8 +547,10 @@ public final class Util {
 
 	private void waitForDeployment(String namespace, V1Deployment deployment) {
 		String deploymentName = deploymentName(deployment);
-		await().pollDelay(Duration.ofSeconds(5)).pollInterval(Duration.ofSeconds(5)).atMost(900, TimeUnit.SECONDS)
-				.until(() -> isDeploymentReady(deploymentName, namespace));
+		await().pollDelay(Duration.ofSeconds(5))
+			.pollInterval(Duration.ofSeconds(5))
+			.atMost(900, TimeUnit.SECONDS)
+			.until(() -> isDeploymentReady(deploymentName, namespace));
 	}
 
 	private void waitForConfigMap(String namespace, V1ConfigMap configMap, Phase phase) {
@@ -554,7 +591,8 @@ public final class Util {
 		await().timeout(Duration.ofSeconds(90)).pollInterval(Duration.ofSeconds(3)).until(() -> {
 			try {
 				V1IngressLoadBalancerStatus status = networkingV1Api.readNamespacedIngress(ingressName, namespace, null)
-						.getStatus().getLoadBalancer();
+					.getStatus()
+					.getLoadBalancer();
 
 				if (status == null) {
 					LOG.info("ingress : " + ingressName + " not ready yet (loadbalancer not yet present)");
@@ -603,8 +641,11 @@ public final class Util {
 	private void waitForDeploymentPodsToBeDeleted(Map<String, String> labels, String namespace) {
 		await().timeout(Duration.ofSeconds(180)).until(() -> {
 			try {
-				int currentNumberOfPods = coreV1Api.listNamespacedPod(namespace, null, null, null, null,
-						labelSelector(labels), null, null, null, null, null, null).getItems().size();
+				int currentNumberOfPods = coreV1Api
+					.listNamespacedPod(namespace, null, null, null, null, labelSelector(labels), null, null, null, null,
+							null, null)
+					.getItems()
+					.size();
 				return currentNumberOfPods == 0;
 			}
 			catch (ApiException e) {
@@ -664,8 +705,10 @@ public final class Util {
 	private static void waitForDeploymentAfterPatch(String deploymentName, String namespace,
 			Map<String, String> podLabels) {
 		try {
-			await().pollDelay(Duration.ofSeconds(4)).pollInterval(Duration.ofSeconds(3)).atMost(60, TimeUnit.SECONDS)
-					.until(() -> isDeploymentReadyAfterPatch(deploymentName, namespace, podLabels));
+			await().pollDelay(Duration.ofSeconds(4))
+				.pollInterval(Duration.ofSeconds(3))
+				.atMost(60, TimeUnit.SECONDS)
+				.until(() -> isDeploymentReadyAfterPatch(deploymentName, namespace, podLabels));
 		}
 		catch (Exception e) {
 			if (e instanceof ApiException apiException) {
@@ -696,8 +739,11 @@ public final class Util {
 			return false;
 		}
 
-		int pods = new CoreV1Api().listNamespacedPod(namespace, null, null, null, null, labelSelector(podLabels), null,
-				null, null, null, null, null).getItems().size();
+		int pods = new CoreV1Api()
+			.listNamespacedPod(namespace, null, null, null, null, labelSelector(podLabels), null, null, null, null,
+					null, null)
+			.getItems()
+			.size();
 
 		if (pods != replicas) {
 			LOG.info("number of pods not yet stabilized");

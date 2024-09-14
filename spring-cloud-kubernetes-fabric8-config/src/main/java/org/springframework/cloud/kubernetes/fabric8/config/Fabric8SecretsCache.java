@@ -18,7 +18,6 @@ package org.springframework.cloud.kubernetes.fabric8.config;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -67,8 +66,10 @@ final class Fabric8SecretsCache implements SecretsCache {
 	}
 
 	private static List<StrippedSourceContainer> strippedSecrets(List<Secret> secrets) {
-		return secrets.stream().map(secret -> new StrippedSourceContainer(secret.getMetadata().getLabels(),
-				secret.getMetadata().getName(), secret.getData())).collect(Collectors.toList());
+		return secrets.stream()
+			.map(secret -> new StrippedSourceContainer(secret.getMetadata().getLabels(), secret.getMetadata().getName(),
+					secret.getData()))
+			.toList();
 	}
 
 }
