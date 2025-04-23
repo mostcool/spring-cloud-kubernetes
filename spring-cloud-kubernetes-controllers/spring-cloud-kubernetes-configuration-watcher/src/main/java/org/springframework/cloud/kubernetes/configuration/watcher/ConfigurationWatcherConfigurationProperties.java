@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,11 @@ public class ConfigurationWatcherConfigurationProperties {
 	public static final String KAFKA = "bus-kafka";
 
 	/**
+	 * not AMQP or KAFKA profile name.
+	 */
+	static final String NOT_AMQP_NOT_KAFKA = "!" + AMQP + " & !" + KAFKA;
+
+	/**
 	 * label to enable refresh/restart when using configmaps.
 	 */
 	public static final String CONFIG_MAP_LABEL = "spring.cloud.kubernetes.config";
@@ -69,6 +74,8 @@ public class ConfigurationWatcherConfigurationProperties {
 	 */
 	@DurationUnit(ChronoUnit.MILLIS)
 	private Duration refreshDelay = Duration.ofMillis(120000);
+
+	private RefreshStrategy refreshStrategy = RefreshStrategy.REFRESH;
 
 	private int threadPoolSize = 1;
 
@@ -113,6 +120,30 @@ public class ConfigurationWatcherConfigurationProperties {
 
 	public void setThreadPoolSize(int threadPoolSize) {
 		this.threadPoolSize = threadPoolSize;
+	}
+
+	public RefreshStrategy getRefreshStrategy() {
+		return refreshStrategy;
+	}
+
+	public void setRefreshStrategy(RefreshStrategy refreshStrategy) {
+		this.refreshStrategy = refreshStrategy;
+	}
+
+	public enum RefreshStrategy {
+
+		/**
+		 * Call the Actuator refresh endpoint or send a refresh event over Spring Cloud
+		 * Bus.
+		 */
+		REFRESH,
+
+		/**
+		 * Call the Actuator shutdown endpoint or send a shutdown event over Spring Cloud
+		 * Bus.
+		 */
+		SHUTDOWN
+
 	}
 
 }

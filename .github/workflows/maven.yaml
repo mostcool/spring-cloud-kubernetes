@@ -2,9 +2,9 @@ name: github-workflow
 
 on:
   push:
-    branches: [ main, 3.1.x, 3.0.x ]
+    branches: [ main, 3.0.x, 3.1.x, 3.2.x ]
   pull_request:
-    branches: [ main, 3.1.x, 3.0.x ]
+    branches: [ main, 3.0.x, 3.1.x, 3.2.x ]
 
 jobs:
   build:
@@ -41,16 +41,14 @@ jobs:
         uses: ./.github/workflows/composites/cache
 
       - name: Show caches
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const caches = await github.rest.actions.getActionsCacheList({
               owner: context.repo.owner,
               repo: context.repo.repo,
             })
-            for (const cache of caches.data.actions_caches) {
-              console.log(cache)
-            }  
+            console.log(caches.data)
 
       - name: maven build with dry-run for tests
         uses: ./.github/workflows/composites/maven-build-with-dry-run-for-tests
@@ -65,7 +63,7 @@ jobs:
 
       - name: check test times cache exists
         id: check_files
-        uses: andstor/file-existence-action@v2
+        uses: andstor/file-existence-action@v3
         with:
           files: /tmp/sorted.txt
 

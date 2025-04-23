@@ -1,7 +1,3 @@
-logging:
-  level:
-    root: DEBUG
-
 spring:
   application:
     name: poll-reload
@@ -12,7 +8,6 @@ spring:
       reload:
         enabled: true
         monitoring-config-maps: true
-        strategy: shutdown
+        strategy: refresh
         mode: polling
-        period: 5000
-
+        period: 5s

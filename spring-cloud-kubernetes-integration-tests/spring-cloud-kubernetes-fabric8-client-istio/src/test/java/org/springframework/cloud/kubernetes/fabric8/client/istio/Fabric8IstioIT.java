@@ -17,32 +17,27 @@
 package org.springframework.cloud.kubernetes.fabric8.client.istio;
 
 import java.io.InputStream;
-import java.time.Duration;
 import java.util.List;
-import java.util.Objects;
 
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
-import io.fabric8.kubernetes.api.model.networking.v1.Ingress;
 import io.fabric8.kubernetes.client.utils.Serialization;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.Container;
 import org.testcontainers.k3s.K3sContainer;
-import reactor.netty.http.client.HttpClient;
-import reactor.util.retry.Retry;
-import reactor.util.retry.RetryBackoffSpec;
 
 import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
 import org.springframework.cloud.kubernetes.integration.tests.commons.fabric8_client.Util;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.processExecResult;
+import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.builder;
+import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.retrySpec;
 
 /**
  * @author wind57
@@ -89,10 +84,8 @@ class Fabric8IstioIT {
 	}
 
 	@AfterAll
-	static void afterAll() throws Exception {
+	static void afterAll() {
 		util.deleteNamespace("istio-system");
-		Commons.cleanUp(IMAGE_NAME, K3S);
-		Commons.systemPrune();
 	}
 
 	@AfterAll
@@ -103,7 +96,7 @@ class Fabric8IstioIT {
 
 	@Test
 	void test() {
-		WebClient client = builder().baseUrl("http://localhost/profiles").build();
+		WebClient client = builder().baseUrl("http://localhost:32321/profiles").build();
 
 		@SuppressWarnings("unchecked")
 		List<String> result = client.method(HttpMethod.GET)
@@ -113,35 +106,24 @@ class Fabric8IstioIT {
 			.block();
 
 		// istio profile is present
-		Assertions.assertTrue(result.contains("istio"));
+		Assertions.assertThat(result).contains("istio");
 	}
 
 	private static void appManifests(Phase phase) {
 
 		InputStream deploymentStream = util.inputStream("istio-deployment.yaml");
 		InputStream serviceStream = util.inputStream("istio-service.yaml");
-		InputStream ingressStream = util.inputStream("istio-ingress.yaml");
 
 		Deployment deployment = Serialization.unmarshal(deploymentStream, Deployment.class);
-
 		Service service = Serialization.unmarshal(serviceStream, Service.class);
-		Ingress ingress = Serialization.unmarshal(ingressStream, Ingress.class);
 
 		if (phase.equals(Phase.CREATE)) {
-			util.createAndWait(NAMESPACE, null, deployment, service, ingress, true);
+			util.createAndWait(NAMESPACE, null, deployment, service, true);
 		}
 		else {
-			util.deleteAndWait(NAMESPACE, deployment, service, ingress);
+			util.deleteAndWait(NAMESPACE, deployment, service);
 		}
 
-	}
-
-	private WebClient.Builder builder() {
-		return WebClient.builder().clientConnector(new ReactorClientHttpConnector(HttpClient.create()));
-	}
-
-	private RetryBackoffSpec retrySpec() {
-		return Retry.fixedDelay(15, Duration.ofSeconds(1)).filter(Objects::nonNull);
 	}
 
 	private static String istioctlPodName() {
@@ -155,6 +137,14 @@ class Fabric8IstioIT {
 		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	private static String processExecResult(Container.ExecResult execResult) {
+		if (execResult.getExitCode() != 0) {
+			throw new RuntimeException("stdout=" + execResult.getStdout() + "\n" + "stderr=" + execResult.getStderr());
+		}
+
+		return execResult.getStdout();
 	}
 
 }
