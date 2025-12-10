@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,10 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.cloud.kubernetes.client.example.App;
 import org.springframework.cloud.kubernetes.commons.EnvReader;
 import org.springframework.context.annotation.Bean;
 
@@ -42,7 +41,7 @@ import org.springframework.context.annotation.Bean;
  * @author wind57
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-		classes = { App.class, ActuatorEnabledFailFastExceptionTest.ActuatorConfig.class },
+		classes = { TestApp.class, ActuatorEnabledFailFastExceptionTest.ActuatorConfig.class },
 		properties = { "management.endpoint.health.show-details=always",
 				"management.endpoint.health.show-components=always", "management.endpoints.web.exposure.include=health",
 				"spring.main.cloud-platform=KUBERNETES" })
@@ -67,18 +66,17 @@ class ActuatorEnabledFailFastExceptionTest {
 
 	@Test
 	void test() throws ApiException {
-		Health health = healthIndicator.getHealth(true);
+		Health health = healthIndicator.health(true);
 		Assertions.assertThat(Status.DOWN).isSameAs(health.getStatus());
-		Mockito.verify(coreV1Api).readNamespacedPod("host", "my-namespace", null);
+		Mockito.verify(coreV1Api).readNamespacedPod("host", "my-namespace");
 	}
 
 	private static void mocks() {
 		envReaderMockedStatic = Mockito.mockStatic(EnvReader.class);
-		pathsMockedStatic = Mockito.mockStatic(Paths.class);
+		pathsMockedStatic = Mockito.mockStatic(Paths.class, Mockito.CALLS_REAL_METHODS);
 
-		envReaderMockedStatic.when(() -> EnvReader.getEnv(KubernetesClientPodUtils.KUBERNETES_SERVICE_HOST))
-			.thenReturn("k8s-host");
-		envReaderMockedStatic.when(() -> EnvReader.getEnv(KubernetesClientPodUtils.HOSTNAME)).thenReturn("host");
+		envReaderMockedStatic.when(() -> EnvReader.getEnv("KUBERNETES_SERVICE_HOST")).thenReturn("k8s-host");
+		envReaderMockedStatic.when(() -> EnvReader.getEnv("HOSTNAME")).thenReturn("host");
 
 		Path serviceAccountTokenPath = Mockito.mock(Path.class);
 		File serviceAccountTokenFile = Mockito.mock(File.class);
@@ -103,7 +101,7 @@ class ActuatorEnabledFailFastExceptionTest {
 
 			mocks();
 
-			Mockito.when(coreV1Api.readNamespacedPod("host", "my-namespace", null))
+			Mockito.when(coreV1Api.readNamespacedPod("host", "my-namespace"))
 				.thenThrow(new RuntimeException("just because"));
 
 			return new KubernetesClientPodUtils(coreV1Api, "my-namespace", FAIL_FAST);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ final class FixedPortsK3sContainer extends K3sContainer {
 	/**
 	 * Rancher version to use for test-containers.
 	 */
-	private static final String RANCHER_VERSION = "rancher/k3s:v1.28.8-k3s1";
+	private static final String RANCHER_VERSION = "rancher/k3s:v1.34.1-k3s1";
 
 	/**
 	 * Command to use when starting rancher. Without "server" option, traefik is not

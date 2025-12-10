@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ import org.springframework.cloud.kubernetes.commons.config.ConfigUtils;
 import org.springframework.cloud.kubernetes.commons.config.NamedConfigMapNormalizedSource;
 import org.springframework.cloud.kubernetes.commons.config.NamedSecretNormalizedSource;
 import org.springframework.cloud.kubernetes.commons.config.NormalizedSource;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -79,7 +80,7 @@ public class KubernetesConfigServerAutoConfiguration {
 
 	@Bean
 	@ConditionalOnKubernetesConfigEnabled
-	@ConditionalOnProperty(value = "spring.cloud.kubernetes.config.enableApi", matchIfMissing = true)
+	@ConditionalOnProperty(value = "spring.cloud.kubernetes.config.enabled", matchIfMissing = true)
 	public KubernetesPropertySourceSupplier configMapPropertySourceSupplier(
 			KubernetesConfigServerProperties properties) {
 		return (coreApi, applicationName, namespace, springEnv) -> {
@@ -91,7 +92,7 @@ public class KubernetesConfigServerAutoConfiguration {
 				NamedConfigMapNormalizedSource source = new NamedConfigMapNormalizedSource(applicationName, space,
 						false, ConfigUtils.Prefix.DEFAULT, true, true);
 				KubernetesClientConfigContext context = new KubernetesClientConfigContext(coreApi, source, space,
-						springEnv, false);
+						springEnv, false, ReadType.BATCH);
 
 				propertySources.add(new KubernetesClientConfigMapPropertySource(context));
 			});
@@ -101,7 +102,7 @@ public class KubernetesConfigServerAutoConfiguration {
 
 	@Bean
 	@ConditionalOnKubernetesSecretsEnabled
-	@ConditionalOnProperty("spring.cloud.kubernetes.secrets.enableApi")
+	@ConditionalOnProperty("spring.cloud.kubernetes.secrets.enabled")
 	public KubernetesPropertySourceSupplier secretsPropertySourceSupplier(KubernetesConfigServerProperties properties) {
 		return (coreApi, applicationName, namespace, springEnv) -> {
 			List<String> namespaces = namespaceSplitter(properties.getSecretsNamespaces(), namespace);
@@ -111,7 +112,7 @@ public class KubernetesConfigServerAutoConfiguration {
 				NormalizedSource source = new NamedSecretNormalizedSource(applicationName, space, false,
 						ConfigUtils.Prefix.DEFAULT, true, true);
 				KubernetesClientConfigContext context = new KubernetesClientConfigContext(coreApi, source, space,
-						springEnv, false);
+						springEnv, false, ReadType.BATCH);
 				propertySources.add(new KubernetesClientSecretsPropertySource(context));
 			});
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -31,6 +33,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  *
  * @author wind57
  */
+@TestPropertySource(properties = "spring.cloud.kubernetes.secrets.enabled=true")
+@AutoConfigureWebTestClient
 abstract class NamedSecretWithProfileTests {
 
 	@Autowired

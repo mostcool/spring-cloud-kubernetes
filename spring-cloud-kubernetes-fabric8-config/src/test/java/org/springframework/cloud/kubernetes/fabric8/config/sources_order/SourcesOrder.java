@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -37,6 +38,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = SourcesOrderApp.class,
 		properties = { "spring.application.name=sources-order", "spring.main.cloud-platform=KUBERNETES" })
+@AutoConfigureWebTestClient
 abstract class SourcesOrder {
 
 	private static KubernetesClient mockClient;
@@ -70,13 +72,15 @@ abstract class SourcesOrder {
 	private static void createSecret(String name, Map<String, String> data) {
 		mockClient.secrets()
 			.inNamespace("spring-k8s")
-			.create(new SecretBuilder().withNewMetadata().withName(name).endMetadata().addToData(data).build());
+			.resource(new SecretBuilder().withNewMetadata().withName(name).endMetadata().addToData(data).build())
+			.create();
 	}
 
 	private static void createConfigmap(String name, Map<String, String> data) {
 		mockClient.configMaps()
 			.inNamespace("spring-k8s")
-			.create(new ConfigMapBuilder().withNewMetadata().withName(name).endMetadata().addToData(data).build());
+			.resource(new ConfigMapBuilder().withNewMetadata().withName(name).endMetadata().addToData(data).build())
+			.create();
 	}
 
 	/**

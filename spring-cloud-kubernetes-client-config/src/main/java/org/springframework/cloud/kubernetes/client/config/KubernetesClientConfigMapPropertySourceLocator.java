@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,15 @@ import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapConfigProperties;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapPropertySourceLocator;
 import org.springframework.cloud.kubernetes.commons.config.NormalizedSource;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Environment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.PropertySource;
 
 import static org.springframework.cloud.kubernetes.client.KubernetesClientUtils.getApplicationNamespace;
+import static org.springframework.cloud.kubernetes.client.config.KubernetesClientSourcesBatchRead.discardConfigMaps;
 
 /**
  * @author Ryan Baxter
@@ -41,19 +45,26 @@ public class KubernetesClientConfigMapPropertySourceLocator extends ConfigMapPro
 
 	public KubernetesClientConfigMapPropertySourceLocator(CoreV1Api coreV1Api, ConfigMapConfigProperties properties,
 			KubernetesNamespaceProvider kubernetesNamespaceProvider) {
-		super(properties, new KubernetesClientConfigMapsCache());
+		super(properties);
 		this.coreV1Api = coreV1Api;
 		this.kubernetesNamespaceProvider = kubernetesNamespaceProvider;
 	}
 
+	public PropertySource<?> locate(Environment environment) {
+		PropertySource<?> propertySource = super.locate(environment);
+		discardConfigMaps();
+		return propertySource;
+	}
+
 	@Override
-	protected MapPropertySource getMapPropertySource(NormalizedSource source, ConfigurableEnvironment environment) {
+	protected MapPropertySource getPropertySource(ConfigurableEnvironment environment, NormalizedSource source,
+			ReadType readType) {
 
 		String normalizedNamespace = source.namespace().orElse(null);
 		String namespace = getApplicationNamespace(normalizedNamespace, source.target(), kubernetesNamespaceProvider);
 
 		KubernetesClientConfigContext context = new KubernetesClientConfigContext(coreV1Api, source, namespace,
-				environment);
+				environment, true, readType);
 		return new KubernetesClientConfigMapPropertySource(context);
 	}
 

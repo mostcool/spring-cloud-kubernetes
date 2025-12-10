@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ import org.springframework.cloud.kubernetes.client.KubernetesClientUtils;
 import org.springframework.cloud.kubernetes.client.config.KubernetesClientSecretsPropertySourceLocator;
 import org.springframework.cloud.kubernetes.client.config.VisibleKubernetesClientEventBasedSecretsChangeDetector;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.cloud.kubernetes.commons.config.RetryProperties;
 import org.springframework.cloud.kubernetes.commons.config.SecretsConfigProperties;
 import org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadProperties;
@@ -163,7 +164,7 @@ class EventReloadSecretTest {
 		// second call passes (change data so that reload is triggered)
 		V1Secret secret = secret(SECRET_NAME, Map.of("a", "b"));
 		V1SecretList secretList = new V1SecretList().addItemsItem(secret);
-		stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(secretList)))
+		stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(secretList)))
 			.inScenario(SCENARIO_NAME)
 			.whenScenarioStateIs("go-to-ok")
 			.willSetStateTo("done"));
@@ -209,7 +210,7 @@ class EventReloadSecretTest {
 			V1Secret secret = secret(SECRET_NAME, Map.of());
 			V1SecretList secretList = new V1SecretList().addItemsItem(secret);
 
-			stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(secretList)))
+			stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(secretList)))
 				.inScenario(SCENARIO_NAME)
 				.whenScenarioStateIs(Scenario.STARTED)
 				.willSetStateTo("go-to-fail"));
@@ -220,8 +221,8 @@ class EventReloadSecretTest {
 			// simulate that environment already has a
 			// KubernetesClientConfigMapPropertySource,
 			// otherwise we can't properly test reload functionality
-			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, Map.of(), List.of(),
-					List.of(), true, SECRET_NAME, NAMESPACE, false, true, FAIL_FAST, RetryProperties.DEFAULT);
+			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
+					SECRET_NAME, NAMESPACE, false, true, FAIL_FAST, RetryProperties.DEFAULT, ReadType.BATCH);
 			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(mockEnvironment);
 
 			PropertySource<?> propertySource = new KubernetesClientSecretsPropertySourceLocator(coreV1Api,
@@ -243,8 +244,8 @@ class EventReloadSecretTest {
 		@Bean
 		@Primary
 		SecretsConfigProperties secretsConfigProperties() {
-			return new SecretsConfigProperties(true, Map.of(), List.of(), List.of(), true, SECRET_NAME, NAMESPACE,
-					false, true, FAIL_FAST, RetryProperties.DEFAULT);
+			return new SecretsConfigProperties(true, List.of(), Map.of(), SECRET_NAME, NAMESPACE, false, true,
+					FAIL_FAST, RetryProperties.DEFAULT, ReadType.BATCH);
 		}
 
 		@Bean

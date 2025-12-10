@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2023 the original author or authors.
+ * Copyright 2019-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,14 @@
 package org.springframework.cloud.kubernetes.client.discovery;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.function.Predicate;
 
 import io.kubernetes.client.informer.SharedIndexInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.informer.cache.Lister;
 import io.kubernetes.client.openapi.ApiClient;
+import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1Endpoints;
 import io.kubernetes.client.openapi.models.V1EndpointsList;
 import io.kubernetes.client.openapi.models.V1Service;
@@ -31,7 +34,7 @@ import io.kubernetes.client.util.generic.GenericKubernetesApi;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.springframework.boot.BootstrapRegistry;
+import org.springframework.boot.bootstrap.BootstrapRegistry;
 import org.springframework.cloud.config.client.ConfigServerConfigDataLocationResolver;
 import org.springframework.cloud.config.client.ConfigServerConfigDataLocationResolver.PropertyResolver;
 import org.springframework.cloud.config.client.ConfigServerInstanceProvider;
@@ -48,7 +51,7 @@ import static org.springframework.cloud.kubernetes.client.KubernetesClientUtils.
 /**
  * @author Ryan Baxter
  */
-class KubernetesClientConfigServerBootstrapper extends KubernetesConfigServerBootstrapper {
+final class KubernetesClientConfigServerBootstrapper extends KubernetesConfigServerBootstrapper {
 
 	private static final Log LOG = LogFactory.getLog(KubernetesClientConfigServerBootstrapper.class);
 
@@ -68,8 +71,9 @@ class KubernetesClientConfigServerBootstrapper extends KubernetesConfigServerBoo
 			if (!getDiscoveryEnabled(context)) {
 				return (id) -> Collections.emptyList();
 			}
-			if (context.isRegistered(KubernetesInformerDiscoveryClient.class)) {
-				KubernetesInformerDiscoveryClient client = context.get(KubernetesInformerDiscoveryClient.class);
+			if (context.isRegistered(KubernetesClientInformerDiscoveryClient.class)) {
+				KubernetesClientInformerDiscoveryClient client = context
+					.get(KubernetesClientInformerDiscoveryClient.class);
 				return client::getInstances;
 			}
 			else {
@@ -95,9 +99,11 @@ class KubernetesClientConfigServerBootstrapper extends KubernetesConfigServerBoo
 				SharedIndexInformer<V1Endpoints> endpointsSharedIndexInformer = sharedInformerFactory
 					.sharedIndexInformerFor(endpointsApi, V1Endpoints.class, 0L, namespace);
 				Lister<V1Endpoints> endpointsLister = new Lister<>(endpointsSharedIndexInformer.getIndexer());
-				KubernetesInformerDiscoveryClient discoveryClient = new KubernetesInformerDiscoveryClient(
-						sharedInformerFactory, serviceLister, endpointsLister, serviceSharedIndexInformer,
-						endpointsSharedIndexInformer, discoveryProperties);
+				Predicate<V1Service> predicate = x -> true;
+				KubernetesClientInformerDiscoveryClient discoveryClient = new KubernetesClientInformerDiscoveryClient(
+						List.of(sharedInformerFactory), List.of(serviceLister), List.of(endpointsLister),
+						List.of(serviceSharedIndexInformer), List.of(endpointsSharedIndexInformer), discoveryProperties,
+						new CoreV1Api(apiClient), predicate);
 				try {
 					discoveryClient.afterPropertiesSet();
 					return discoveryClient::getInstances;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2025 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.kubernetes.commons.discovery.DefaultKubernetesServiceInstance;
+import org.springframework.cloud.kubernetes.commons.discovery.ExternalNameKubernetesServiceInstance;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
@@ -88,7 +89,7 @@ class KubernetesClientDiscoverySimpleIT extends KubernetesClientDiscoveryBase {
 		K3S.execInContainer("sh", "-c",
 				"kubectl annotate pods " + both[1].split("/")[1] + " custom-annotation=custom-annotation-value");
 
-		assertLogStatement(output, "using selective namespaces : [default]");
+		assertLogStatement(output, "serviceSharedInformers will use selective namespaces : [default]");
 
 		List<String> services = discoveryClient.getServices();
 		List<ServiceInstance> instances = discoveryClient.getInstances("busybox-service");
@@ -133,7 +134,7 @@ class KubernetesClientDiscoverySimpleIT extends KubernetesClientDiscoveryBase {
 	}
 
 	private void testExternalNameService(DiscoveryClient discoveryClient) {
-		DefaultKubernetesServiceInstance externalNameService = (DefaultKubernetesServiceInstance) discoveryClient
+		ExternalNameKubernetesServiceInstance externalNameService = (ExternalNameKubernetesServiceInstance) discoveryClient
 			.getInstances("external-name-service")
 			.get(0);
 
@@ -144,7 +145,7 @@ class KubernetesClientDiscoverySimpleIT extends KubernetesClientDiscoveryBase {
 			.containsAllEntriesOf(Map.of("k8s_namespace", "default", "type", "ExternalName"));
 		assertThat(externalNameService.isSecure()).isFalse();
 		assertThat(externalNameService.getUri().toASCIIString()).isEqualTo("spring.io");
-		assertThat(externalNameService.getScheme()).isEqualTo("http");
+		assertThat(externalNameService.getScheme()).isNull();
 	}
 
 	// https://github.com/spring-cloud/spring-cloud-kubernetes/issues/1286

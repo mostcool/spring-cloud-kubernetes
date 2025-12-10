@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,18 @@
 
 package org.springframework.cloud.kubernetes.fabric8.config;
 
-import java.util.function.Supplier;
-
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import org.springframework.boot.DefaultBootstrapContext;
+import org.springframework.boot.bootstrap.DefaultBootstrapContext;
 import org.springframework.boot.context.config.ConfigDataLocation;
 import org.springframework.boot.context.config.ConfigDataLocationResolverContext;
 import org.springframework.boot.context.config.Profiles;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
-import org.springframework.boot.logging.DeferredLogFactory;
 import org.springframework.cloud.kubernetes.commons.KubernetesClientProperties;
 import org.springframework.cloud.kubernetes.commons.config.ConfigDataRetryableConfigMapPropertySourceLocator;
 import org.springframework.cloud.kubernetes.commons.config.ConfigDataRetryableSecretsPropertySourceLocator;
@@ -45,12 +42,10 @@ import org.springframework.mock.env.MockEnvironment;
  */
 class Fabric8ConfigDataLocationResolverTests {
 
-	private static final DeferredLogFactory FACTORY = Supplier::get;
-
 	private static final ConfigDataLocationResolverContext RESOLVER_CONTEXT = Mockito
 		.mock(ConfigDataLocationResolverContext.class);
 
-	private static final Fabric8ConfigDataLocationResolver RESOLVER = new Fabric8ConfigDataLocationResolver(FACTORY);
+	private static final Fabric8ConfigDataLocationResolver RESOLVER = new Fabric8ConfigDataLocationResolver();
 
 	/*
 	 * both ConfigMapConfigProperties and SecretsConfigProperties are null, thus they are
@@ -98,6 +93,7 @@ class Fabric8ConfigDataLocationResolverTests {
 	@Test
 	void testBothPresent() {
 		MockEnvironment environment = new MockEnvironment();
+		environment.setProperty("spring.cloud.kubernetes.secrets.enabled", "true");
 		ConfigurationPropertySources.attach(environment);
 		Binder binder = new Binder(ConfigurationPropertySources.get(environment));
 
@@ -191,6 +187,7 @@ class Fabric8ConfigDataLocationResolverTests {
 		environment.setProperty("spring.cloud.kubernetes.config.fail-fast", "true");
 		environment.setProperty("spring.cloud.kubernetes.secrets.retry.enabled", "true");
 		environment.setProperty("spring.cloud.kubernetes.secrets.fail-fast", "true");
+		environment.setProperty("spring.cloud.kubernetes.secrets.enabled", "true");
 		ConfigurationPropertySources.attach(environment);
 		Binder binder = new Binder(ConfigurationPropertySources.get(environment));
 

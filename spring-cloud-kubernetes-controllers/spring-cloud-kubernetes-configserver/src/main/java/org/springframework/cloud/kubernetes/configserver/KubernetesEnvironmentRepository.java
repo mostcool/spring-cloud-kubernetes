@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,15 +47,7 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository, O
 
 	private final String namespace;
 
-	private int order = KubernetesConfigServerProperties.DEFAULT_ORDER;
-
-	@Deprecated
-	public KubernetesEnvironmentRepository(CoreV1Api coreApi,
-			List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers, String namespace) {
-		this.coreApi = coreApi;
-		this.kubernetesPropertySourceSuppliers = kubernetesPropertySourceSuppliers;
-		this.namespace = namespace;
-	}
+	private final int order;
 
 	public KubernetesEnvironmentRepository(CoreV1Api coreApi,
 			List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers, String namespace,
@@ -134,10 +126,6 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository, O
 	@Override
 	public int getOrder() {
 		return this.order;
-	}
-
-	public void setOrder(int order) {
-		this.order = order;
 	}
 
 }

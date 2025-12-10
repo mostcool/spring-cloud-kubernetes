@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ class SecretsEnableRetryWithoutFailFastTests {
 	void doesNotContainRetryableSecretsPropertySourceLocator() throws Exception {
 		mockServer.expect().withPath(API).andReturn(500, "Internal Server Error").once();
 		setup("debug=true", "spring.main.cloud-platform=KUBERNETES", "spring.cloud.kubernetes.test.enable-retry=true",
-				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enable-api=true");
+				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enabled=true");
 		assertThat(context.containsBean("retryableSecretsPropertySourceLocator")).isFalse();
 	}
 

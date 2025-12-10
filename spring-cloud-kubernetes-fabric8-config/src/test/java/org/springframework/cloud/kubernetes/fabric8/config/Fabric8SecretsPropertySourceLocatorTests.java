@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.cloud.kubernetes.commons.config.RetryProperties;
 import org.springframework.cloud.kubernetes.commons.config.SecretsConfigProperties;
 import org.springframework.core.env.CompositePropertySource;
@@ -64,8 +65,8 @@ class Fabric8SecretsPropertySourceLocatorTests {
 
 		mockServer.expect().withPath(path).andReturn(500, "Internal Server Error").always();
 
-		SecretsConfigProperties configMapConfigProperties = new SecretsConfigProperties(true, Map.of(), List.of(),
-				List.of(), true, name, namespace, false, true, true, RetryProperties.DEFAULT);
+		SecretsConfigProperties configMapConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(), name,
+				namespace, false, true, true, RetryProperties.DEFAULT, ReadType.BATCH);
 
 		Fabric8SecretsPropertySourceLocator locator = new Fabric8SecretsPropertySourceLocator(mockClient,
 				configMapConfigProperties, new KubernetesNamespaceProvider(new MockEnvironment()));
@@ -82,8 +83,8 @@ class Fabric8SecretsPropertySourceLocatorTests {
 
 		mockServer.expect().withPath(path).andReturn(500, "Internal Server Error").always();
 
-		SecretsConfigProperties configMapConfigProperties = new SecretsConfigProperties(true, Map.of(), List.of(),
-				List.of(), true, name, namespace, false, true, false, RetryProperties.DEFAULT);
+		SecretsConfigProperties configMapConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(), name,
+				namespace, false, true, false, RetryProperties.DEFAULT, ReadType.BATCH);
 
 		Fabric8SecretsPropertySourceLocator locator = new Fabric8SecretsPropertySourceLocator(mockClient,
 				configMapConfigProperties, new KubernetesNamespaceProvider(new MockEnvironment()));

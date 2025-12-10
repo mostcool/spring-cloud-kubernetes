@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,20 @@
 package org.springframework.cloud.kubernetes.client.config.applications.labeled_secret_with_profile;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.cloud.kubernetes.client.config.applications.labeled_secret_with_profile.properties.Blue;
+import org.springframework.cloud.kubernetes.client.config.applications.labeled_secret_with_profile.properties.Green;
+import org.springframework.cloud.kubernetes.client.config.applications.labeled_secret_with_profile.properties.GreenK8s;
+import org.springframework.cloud.kubernetes.client.config.applications.labeled_secret_with_profile.properties.GreenProd;
+import org.springframework.cloud.kubernetes.client.config.applications.labeled_secret_with_profile.properties.GreenPurple;
+import org.springframework.cloud.kubernetes.client.config.applications.labeled_secret_with_profile.properties.GreenPurpleK8s;
+import org.springframework.test.context.TestPropertySource;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /*
  * <pre>
@@ -43,10 +50,26 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  *
  * @author wind57
  */
+@TestPropertySource(properties = { "spring.cloud.kubernetes.secrets.enabled=true" })
 abstract class LabeledSecretWithProfileTests {
 
 	@Autowired
-	private WebTestClient webClient;
+	private Blue blue;
+
+	@Autowired
+	private Green green;
+
+	@Autowired
+	private GreenK8s greenK8s;
+
+	@Autowired
+	private GreenProd greenProd;
+
+	@Autowired
+	private GreenPurple greenPurple;
+
+	@Autowired
+	private GreenPurpleK8s greenPurpleK8s;
 
 	@AfterEach
 	public void afterEach() {
@@ -60,39 +83,37 @@ abstract class LabeledSecretWithProfileTests {
 
 	/**
 	 * <pre>
-	 *     this one is taken from : "blue.one". We find "color-secret" by labels, and
-	 *     "color-secrets-k8s" exists, but "includeProfileSpecificSources=false", thus not taken.
-	 *     Since "explicitPrefix=blue", we take "blue.one"
+	 *     this one is taken from : "blue.one". We find "color-secret" by labels.
 	 * </pre>
 	 */
 	@Test
 	void testBlue() {
-		this.webClient.get()
-			.uri("/labeled-secret/profile/blue")
-			.exchange()
-			.expectStatus()
-			.isOk()
-			.expectBody(String.class)
-			.value(Matchers.equalTo("1"));
+		assertThat(blue.getOne()).isEqualTo("1");
 	}
 
-	/**
-	 * <pre>
-	 *   this one is taken from : "green-purple-secret.green-purple-secret-k8s.green-secret.green-secret-k8s.green-secret-prod".
-	 *   We find "green-secret" by labels, also "green-secrets-k8s" and "green-secrets-prod" exists,
-	 *   because "includeProfileSpecificSources=true" is set. Also "green-purple-secret" and "green-purple-secret-k8s"
-	 * 	 are found.
-	 * </pre>
-	 */
 	@Test
 	void testGreen() {
-		this.webClient.get()
-			.uri("/labeled-secret/profile/green")
-			.exchange()
-			.expectStatus()
-			.isOk()
-			.expectBody(String.class)
-			.value(Matchers.equalTo("2#6#7#eight-ish"));
+		assertThat(green.getTwo()).isEqualTo("2");
+	}
+
+	@Test
+	void testGreenK8s() {
+		assertThat(greenK8s.getSix()).isEqualTo("6");
+	}
+
+	@Test
+	void testGreenProd() {
+		assertThat(greenProd.getSeven()).isEqualTo("7");
+	}
+
+	@Test
+	void testGreenPurple() {
+		assertThat(greenPurple.getEight()).isEqualTo("8");
+	}
+
+	@Test
+	void testGreenPurpleK8s() {
+		assertThat(greenPurpleK8s.getEight()).isEqualTo("eight-ish");
 	}
 
 }

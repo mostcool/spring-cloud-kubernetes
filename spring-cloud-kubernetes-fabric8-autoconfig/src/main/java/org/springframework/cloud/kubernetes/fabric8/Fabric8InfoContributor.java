@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,11 @@ import org.springframework.util.CollectionUtils;
  *
  * @author Mark Anderson
  */
-public class Fabric8InfoContributor extends AbstractKubernetesInfoContributor {
+final class Fabric8InfoContributor extends AbstractKubernetesInfoContributor {
 
 	private final PodUtils<Pod> utils;
 
-	public Fabric8InfoContributor(PodUtils<Pod> utils) {
+	Fabric8InfoContributor(PodUtils<Pod> utils) {
 		this.utils = utils;
 	}
 

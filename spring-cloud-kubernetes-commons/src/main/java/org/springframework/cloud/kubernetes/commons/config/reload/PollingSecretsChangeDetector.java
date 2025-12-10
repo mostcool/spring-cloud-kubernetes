@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.apache.commons.logging.LogFactory;
 
 import org.springframework.cloud.bootstrap.config.PropertySourceLocator;
 import org.springframework.core.env.AbstractEnvironment;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.PeriodicTrigger;
@@ -46,6 +47,8 @@ public class PollingSecretsChangeDetector extends ConfigurationChangeDetector {
 
 	private final TaskScheduler taskExecutor;
 
+	private final ConfigurableEnvironment environment;
+
 	private final long period;
 
 	private final boolean monitorSecrets;
@@ -53,7 +56,8 @@ public class PollingSecretsChangeDetector extends ConfigurationChangeDetector {
 	public PollingSecretsChangeDetector(AbstractEnvironment environment, ConfigReloadProperties properties,
 			ConfigurationUpdateStrategy strategy, Class<? extends MapPropertySource> propertySourceClass,
 			PropertySourceLocator propertySourceLocator, TaskScheduler taskExecutor) {
-		super(environment, properties, strategy);
+		super(strategy);
+		this.environment = environment;
 		this.propertySourceLocator = propertySourceLocator;
 		this.propertySourceClass = propertySourceClass;
 		this.taskExecutor = taskExecutor;

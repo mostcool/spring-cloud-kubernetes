@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,9 +35,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.cloud.kubernetes.commons.config.ConfigUtils;
 import org.springframework.cloud.kubernetes.commons.config.LabeledSecretNormalizedSource;
 import org.springframework.cloud.kubernetes.commons.config.NamedSecretNormalizedSource;
 import org.springframework.cloud.kubernetes.commons.config.NormalizedSource;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.mock.env.MockEnvironment;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -152,18 +154,17 @@ class KubernetesClientSecretsPropertySourceTests {
 	@AfterEach
 	void afterEach() {
 		WireMock.reset();
-		new KubernetesClientSecretsCache().discardAll();
+		KubernetesClientSourcesBatchRead.discardSecrets();
 	}
 
 	@Test
 	void emptyDataSecretTest() {
 		CoreV1Api api = new CoreV1Api();
-		stubFor(get(API)
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(EMPTY_DATA_SECRET_LIST))));
+		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(EMPTY_DATA_SECRET_LIST))));
 
 		NormalizedSource source = new NamedSecretNormalizedSource("db-secret", "default", false, false);
 		KubernetesClientConfigContext context = new KubernetesClientConfigContext(api, source, "default",
-				new MockEnvironment());
+				new MockEnvironment(), true, ReadType.BATCH);
 
 		KubernetesClientSecretsPropertySource propertySource = new KubernetesClientSecretsPropertySource(context);
 		assertThat(propertySource.getName()).isEqualTo("secret.db-secret.default");
@@ -173,11 +174,11 @@ class KubernetesClientSecretsPropertySourceTests {
 	@Test
 	void secretsTest() {
 		CoreV1Api api = new CoreV1Api();
-		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(SECRET_LIST))));
+		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(SECRET_LIST))));
 
 		NormalizedSource source = new NamedSecretNormalizedSource("db-secret", "default", false, false);
 		KubernetesClientConfigContext context = new KubernetesClientConfigContext(api, source, "default",
-				new MockEnvironment());
+				new MockEnvironment(), true, ReadType.BATCH);
 
 		KubernetesClientSecretsPropertySource propertySource = new KubernetesClientSecretsPropertySource(context);
 		assertThat(propertySource.containsProperty("password")).isTrue();
@@ -193,9 +194,10 @@ class KubernetesClientSecretsPropertySourceTests {
 		Map<String, String> labels = new HashMap<>();
 		labels.put("spring.cloud.kubernetes.secret", "true");
 
-		NormalizedSource source = new LabeledSecretNormalizedSource("default", labels, false, false);
+		NormalizedSource source = new LabeledSecretNormalizedSource("default", labels, false,
+				ConfigUtils.Prefix.DEFAULT);
 		KubernetesClientConfigContext context = new KubernetesClientConfigContext(api, source, "default",
-				new MockEnvironment());
+				new MockEnvironment(), false, ReadType.BATCH);
 
 		KubernetesClientSecretsPropertySource propertySource = new KubernetesClientSecretsPropertySource(context);
 		assertThat(propertySource.containsProperty("spring.rabbitmq.password")).isTrue();
@@ -209,7 +211,7 @@ class KubernetesClientSecretsPropertySourceTests {
 
 		NormalizedSource source = new NamedSecretNormalizedSource("secret", "default", true, false);
 		KubernetesClientConfigContext context = new KubernetesClientConfigContext(api, source, "default",
-				new MockEnvironment());
+				new MockEnvironment(), true, ReadType.BATCH);
 
 		assertThatThrownBy(() -> new KubernetesClientSecretsPropertySource(context))
 			.isInstanceOf(IllegalStateException.class)
@@ -224,7 +226,7 @@ class KubernetesClientSecretsPropertySourceTests {
 
 		NormalizedSource source = new NamedSecretNormalizedSource("secret", "db-secret", false, false);
 		KubernetesClientConfigContext context = new KubernetesClientConfigContext(api, source, "default",
-				new MockEnvironment());
+				new MockEnvironment(), true, ReadType.BATCH);
 
 		assertThatNoException().isThrownBy((() -> new KubernetesClientSecretsPropertySource(context)));
 		verify(getRequestedFor(urlEqualTo(API)));

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,20 +113,20 @@ class KubernetesClientEventBasedSecretsChangeDetectorTests {
 		stubFor(get(urlMatching("/api/v1/namespaces/default/secrets.*")).inScenario(SCENARIO)
 			.whenScenarioStateIs(STARTED)
 			.withQueryParams(WATCH_FALSE)
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(secretList)))
+			.willReturn(aResponse().withStatus(200).withBody(JSON.serialize(secretList)))
 			.willSetStateTo("update"));
 
 		stubFor(get(urlMatching("/api/v1/namespaces/default/secrets.*")).inScenario(SCENARIO)
 			.whenScenarioStateIs("update")
 			.withQueryParams(WATCH_TRUE)
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(watchResponse)))
+			.willReturn(aResponse().withStatus(200).withBody(JSON.serialize(watchResponse)))
 			.willSetStateTo("add"));
 
 		stubFor(get(urlMatching("/api/v1/namespaces/default/secrets.*")).inScenario(SCENARIO)
 			.whenScenarioStateIs("add")
 			.withQueryParams(WATCH_TRUE)
 			.willReturn(aResponse().withStatus(200)
-				.withBody(new JSON().serialize(new Watch.Response<>(EventType.ADDED.name(),
+				.withBody(JSON.serialize(new Watch.Response<>(EventType.ADDED.name(),
 						new V1Secret().metadata(new V1ObjectMeta().name("rabbit-password"))
 							.putDataItem("rabbit-pw", Base64.getEncoder().encode("password".getBytes()))))))
 			.willSetStateTo("delete"));
@@ -135,7 +135,7 @@ class KubernetesClientEventBasedSecretsChangeDetectorTests {
 			.whenScenarioStateIs("delete")
 			.withQueryParams(WATCH_TRUE)
 			.willReturn(aResponse().withStatus(200)
-				.withBody(new JSON().serialize(new Watch.Response<>(EventType.DELETED.name(),
+				.withBody(JSON.serialize(new Watch.Response<>(EventType.DELETED.name(),
 						new V1Secret().metadata(new V1ObjectMeta().name("rabbit-password"))
 							.putDataItem("rabbit-pw", Base64.getEncoder().encode("password".getBytes()))))))
 			.willSetStateTo("done"));

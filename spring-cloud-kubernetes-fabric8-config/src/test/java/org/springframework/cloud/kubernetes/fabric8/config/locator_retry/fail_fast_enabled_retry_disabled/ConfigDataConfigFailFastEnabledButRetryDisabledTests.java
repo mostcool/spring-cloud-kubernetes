@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,15 +24,16 @@ import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
 import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
 import org.junit.jupiter.api.BeforeAll;
 
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapConfigProperties;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.cloud.kubernetes.commons.config.RetryProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * we call Fabric8ConfigMapPropertySourceLocator::locate directly, thus no need for
@@ -53,7 +54,7 @@ class ConfigDataConfigFailFastEnabledButRetryDisabledTests extends ConfigFailFas
 
 	private static KubernetesClient mockClient;
 
-	@MockBean
+	@MockitoBean
 	private KubernetesNamespaceProvider kubernetesNamespaceProvider;
 
 	@BeforeAll
@@ -66,14 +67,14 @@ class ConfigDataConfigFailFastEnabledButRetryDisabledTests extends ConfigFailFas
 
 		/**
 		 * we need this config because ConfigMapConfigProperties is now a record, so we
-		 * can't use @SpyBean on it. We also read the property of fail-fast from the
-		 * Environment, that in turn is set in the @SpringBootTest properties.
+		 * can't use @MockitoSpyBean on it. We also read the property of fail-fast from
+		 * the Environment, that in turn is set in the @SpringBootTest properties.
 		 */
 		@Bean
 		ConfigMapConfigProperties properties(Environment environment) {
-			return new ConfigMapConfigProperties(true, List.of(), List.of(), Map.of(), true, null, null, false, true,
+			return new ConfigMapConfigProperties(true, List.of(), Map.of(), null, null, false, true,
 					Boolean.parseBoolean(environment.getProperty("spring.cloud.kubernetes.config.fail-fast")),
-					RetryProperties.DEFAULT);
+					RetryProperties.DEFAULT, ReadType.BATCH);
 		}
 
 	}

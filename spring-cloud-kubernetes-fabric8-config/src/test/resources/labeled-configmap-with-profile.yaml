@@ -4,15 +4,13 @@ spring:
   cloud:
     kubernetes:
       config:
-        enableApi: true
+        enabled: true
         useNameAsPrefix: true
         namespace: spring-k8s
-        includeProfileSpecificSources: true
         sources:
           - labels:
               color: blue
             explicitPrefix: blue
-            includeProfileSpecificSources: false
           - labels:
               color: green
           - labels:

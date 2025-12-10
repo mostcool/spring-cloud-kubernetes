@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +27,13 @@ import io.kubernetes.client.openapi.models.V1ObjectMetaBuilder;
 import io.kubernetes.client.openapi.models.V1Secret;
 import io.kubernetes.client.openapi.models.V1SecretBuilder;
 import io.kubernetes.client.openapi.models.V1SecretList;
-import io.kubernetes.client.openapi.models.V1SecretListBuilder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.cloud.config.environment.Environment;
+import org.springframework.cloud.kubernetes.client.config.KubernetesClientSourcesBatchRead;
 import org.springframework.cloud.kubernetes.commons.config.Constants;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,7 +49,7 @@ import static org.mockito.Mockito.when;
  */
 class KubernetesPropertySourceSupplierTests {
 
-	private static final CoreV1Api coreApi = mock(CoreV1Api.class);
+	private static final CoreV1Api CORE_V1_API = mock(CoreV1Api.class);
 
 	private static final V1ConfigMapList CONFIGMAP_DEFAULT_LIST = new V1ConfigMapList()
 		.addItemsItem(buildConfigMap("gateway", "default"));
@@ -58,39 +60,56 @@ class KubernetesPropertySourceSupplierTests {
 	private static final V1ConfigMapList CONFIGMAP_TEAM_B_LIST = new V1ConfigMapList()
 		.addItemsItem(buildConfigMap("orders", "team-b"));
 
-	private static final V1SecretList SECRET_DEFAULT_LIST = new V1SecretListBuilder()
-		.addToItems(buildSecret("gateway", "default"))
-		.build();
+	private static final V1SecretList SECRET_DEFAULT_LIST = new V1SecretList()
+		.addItemsItem(buildSecret("gateway", "default"));
 
-	private static final V1SecretList SECRET_TEAM_A_LIST = new V1SecretListBuilder()
-		.addToItems(buildSecret("stores", "team-a"))
-		.build();
+	private static final V1SecretList SECRET_TEAM_A_LIST = new V1SecretList()
+		.addItemsItem(buildSecret("stores", "team-a"));
 
-	private static final V1SecretList SECRET_TEAM_B_LIST = new V1SecretListBuilder()
-		.addToItems(buildSecret("orders", "team-b"))
-		.build();
+	private static final V1SecretList SECRET_TEAM_B_LIST = new V1SecretList()
+		.addItemsItem(buildSecret("orders", "team-b"));
+
+	private static final KubernetesConfigServerProperties PROPERTIES = properties();
 
 	@BeforeAll
-	public static void before() throws ApiException {
-		when(coreApi.listNamespacedConfigMap(eq("default"), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
-				eq(null), eq(null), eq(null), eq(null), eq(null)))
-			.thenReturn(CONFIGMAP_DEFAULT_LIST);
-		when(coreApi.listNamespacedConfigMap(eq("team-a"), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
-				eq(null), eq(null), eq(null), eq(null), eq(null)))
-			.thenReturn(CONFIGMAP_TEAM_A_LIST);
-		when(coreApi.listNamespacedConfigMap(eq("team-b"), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
-				eq(null), eq(null), eq(null), eq(null), eq(null)))
-			.thenReturn(CONFIGMAP_TEAM_B_LIST);
+	static void beforeAll() throws ApiException {
+		CoreV1Api.APIlistNamespacedConfigMapRequest defaultRequest = mock(
+				CoreV1Api.APIlistNamespacedConfigMapRequest.class);
+		when(defaultRequest.execute()).thenReturn(CONFIGMAP_DEFAULT_LIST);
+		when(CORE_V1_API.listNamespacedConfigMap(eq("default"))).thenReturn(defaultRequest);
+		CoreV1Api.APIlistNamespacedConfigMapRequest teamARequest = mock(
+				CoreV1Api.APIlistNamespacedConfigMapRequest.class);
+		when(teamARequest.execute()).thenReturn(CONFIGMAP_TEAM_A_LIST);
+		when(CORE_V1_API.listNamespacedConfigMap(eq("team-a"))).thenReturn(teamARequest);
+		CoreV1Api.APIlistNamespacedConfigMapRequest teamBRequest = mock(
+				CoreV1Api.APIlistNamespacedConfigMapRequest.class);
+		when(teamBRequest.execute()).thenReturn(CONFIGMAP_TEAM_B_LIST);
+		when(CORE_V1_API.listNamespacedConfigMap(eq("team-b"))).thenReturn(teamBRequest);
 
-		when(coreApi.listNamespacedSecret(eq("default"), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
-				eq(null), eq(null), eq(null), eq(null), eq(null)))
-			.thenReturn(SECRET_DEFAULT_LIST);
-		when(coreApi.listNamespacedSecret(eq("team-a"), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
-				eq(null), eq(null), eq(null), eq(null), eq(null)))
-			.thenReturn(SECRET_TEAM_A_LIST);
-		when(coreApi.listNamespacedSecret(eq("team-b"), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
-				eq(null), eq(null), eq(null), eq(null), eq(null)))
-			.thenReturn(SECRET_TEAM_B_LIST);
+		CoreV1Api.APIlistNamespacedSecretRequest defaultSecretRequest = mock(
+				CoreV1Api.APIlistNamespacedSecretRequest.class);
+		when(defaultSecretRequest.execute()).thenReturn(SECRET_DEFAULT_LIST);
+		when(CORE_V1_API.listNamespacedSecret(eq("default"))).thenReturn(defaultSecretRequest);
+		CoreV1Api.APIlistNamespacedSecretRequest teamASecretRequest = mock(
+				CoreV1Api.APIlistNamespacedSecretRequest.class);
+		when(teamASecretRequest.execute()).thenReturn(SECRET_TEAM_A_LIST);
+		when(CORE_V1_API.listNamespacedSecret(eq("team-a"))).thenReturn(teamASecretRequest);
+		CoreV1Api.APIlistNamespacedSecretRequest teamBSecretRequest = mock(
+				CoreV1Api.APIlistNamespacedSecretRequest.class);
+		when(teamBSecretRequest.execute()).thenReturn(SECRET_TEAM_B_LIST);
+		when(CORE_V1_API.listNamespacedSecret(eq("team-b"))).thenReturn(teamBSecretRequest);
+	}
+
+	@AfterEach
+	void afterEach() {
+		KubernetesClientSourcesBatchRead.discardConfigMaps();
+		KubernetesClientSourcesBatchRead.discardSecrets();
+	}
+
+	@BeforeEach
+	void beforeEach() {
+		KubernetesClientSourcesBatchRead.discardConfigMaps();
+		KubernetesClientSourcesBatchRead.discardSecrets();
 	}
 
 	@Test
@@ -101,8 +120,8 @@ class KubernetesPropertySourceSupplierTests {
 		KubernetesPropertySourceSupplier kubernetesPropertySourceSupplier = new KubernetesConfigServerAutoConfiguration()
 			.configMapPropertySourceSupplier(kubernetesConfigServerProperties);
 
-		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(coreApi,
-				Collections.singletonList(kubernetesPropertySourceSupplier), "default");
+		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(CORE_V1_API,
+				Collections.singletonList(kubernetesPropertySourceSupplier), "default", PROPERTIES);
 
 		Environment environmentGateway = environmentRepository.findOne("gateway", "", "");
 		assertThat(environmentGateway.getPropertySources().size()).isEqualTo(1);
@@ -122,8 +141,8 @@ class KubernetesPropertySourceSupplierTests {
 		KubernetesPropertySourceSupplier kubernetesPropertySourceSupplier = new KubernetesConfigServerAutoConfiguration()
 			.configMapPropertySourceSupplier(kubernetesConfigServerProperties);
 
-		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(coreApi,
-				Collections.singletonList(kubernetesPropertySourceSupplier), "default");
+		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(CORE_V1_API,
+				Collections.singletonList(kubernetesPropertySourceSupplier), "default", PROPERTIES);
 
 		Environment environmentGateway = environmentRepository.findOne("gateway", "", "");
 		assertThat(environmentGateway.getPropertySources().size()).isEqualTo(0);
@@ -143,8 +162,8 @@ class KubernetesPropertySourceSupplierTests {
 		KubernetesPropertySourceSupplier kubernetesPropertySourceSupplier = new KubernetesConfigServerAutoConfiguration()
 			.secretsPropertySourceSupplier(kubernetesConfigServerProperties);
 
-		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(coreApi,
-				Collections.singletonList(kubernetesPropertySourceSupplier), "default");
+		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(CORE_V1_API,
+				Collections.singletonList(kubernetesPropertySourceSupplier), "default", PROPERTIES);
 
 		Environment environmentGateway = environmentRepository.findOne("gateway", "", "");
 		assertThat(environmentGateway.getPropertySources().size()).isEqualTo(1);
@@ -164,8 +183,8 @@ class KubernetesPropertySourceSupplierTests {
 		KubernetesPropertySourceSupplier kubernetesPropertySourceSupplier = new KubernetesConfigServerAutoConfiguration()
 			.secretsPropertySourceSupplier(kubernetesConfigServerProperties);
 
-		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(coreApi,
-				Collections.singletonList(kubernetesPropertySourceSupplier), "default");
+		KubernetesEnvironmentRepository environmentRepository = new KubernetesEnvironmentRepository(CORE_V1_API,
+				Collections.singletonList(kubernetesPropertySourceSupplier), "default", PROPERTIES);
 
 		Environment environmentGateway = environmentRepository.findOne("gateway", "", "");
 		assertThat(environmentGateway.getPropertySources().size()).isEqualTo(0);
@@ -179,19 +198,25 @@ class KubernetesPropertySourceSupplierTests {
 
 	private static V1ConfigMap buildConfigMap(String name, String namespace) {
 		return new V1ConfigMapBuilder()
-			.withMetadata(
-					new V1ObjectMetaBuilder().withName(name).withNamespace(namespace).withResourceVersion("1").build())
-			.addToData(Constants.APPLICATION_YAML, "dummy:\n  property:\n    string: \"" + name + "\"\n")
+			.withMetadata(new V1ObjectMetaBuilder().withName(name).withNamespace(namespace).build())
+			.addToData(Constants.APPLICATION_PROPERTIES, """
+					dummy.property.string=%s
+					""".formatted(name))
 			.build();
 	}
 
 	private static V1Secret buildSecret(String name, String namespace) {
 		return new V1SecretBuilder()
-			.withMetadata(
-					new V1ObjectMetaBuilder().withName(name).withResourceVersion("0").withNamespace(namespace).build())
+			.withMetadata(new V1ObjectMetaBuilder().withName(name).withNamespace(namespace).build())
 			.addToData("password", "p455w0rd".getBytes())
 			.addToData("username", "user".getBytes())
 			.build();
+	}
+
+	private static KubernetesConfigServerProperties properties() {
+		KubernetesConfigServerProperties properties = new KubernetesConfigServerProperties();
+		properties.setOrder(1);
+		return properties;
 	}
 
 }

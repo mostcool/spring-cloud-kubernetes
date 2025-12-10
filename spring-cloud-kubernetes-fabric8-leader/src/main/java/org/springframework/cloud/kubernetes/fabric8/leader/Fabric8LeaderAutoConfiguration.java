@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import java.net.UnknownHostException;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 
+import org.springframework.boot.actuate.autoconfigure.info.ConditionalOnEnabledInfoContributor;
 import org.springframework.boot.actuate.info.InfoContributor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -74,6 +75,7 @@ public class Fabric8LeaderAutoConfiguration {
 	 */
 	@Bean
 	@ConditionalOnClass(InfoContributor.class)
+	@ConditionalOnEnabledInfoContributor("leader")
 	public LeaderInfoContributor leaderInfoContributor(Fabric8LeadershipController fabric8LeadershipController,
 			Candidate candidate) {
 		return new LeaderInfoContributor(fabric8LeadershipController, candidate);
@@ -101,7 +103,7 @@ public class Fabric8LeaderAutoConfiguration {
 		return new Fabric8LeaderRecordWatcher(leaderProperties, fabric8LeadershipController, kubernetesClient);
 	}
 
-	@Bean(destroyMethod = "stop")
+	@Bean
 	public LeaderInitiator leaderInitiator(LeaderProperties leaderProperties,
 			Fabric8LeadershipController fabric8LeadershipController,
 			Fabric8LeaderRecordWatcher fabric8LeaderRecordWatcher, Fabric8PodReadinessWatcher hostPodWatcher) {

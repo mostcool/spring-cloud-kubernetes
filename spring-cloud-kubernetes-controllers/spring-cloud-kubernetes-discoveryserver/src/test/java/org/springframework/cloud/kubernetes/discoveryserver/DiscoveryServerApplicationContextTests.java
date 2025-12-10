@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.cloud.kubernetes.client.discovery.reactive.KubernetesInformerReactiveDiscoveryClient;
+import org.springframework.cloud.kubernetes.client.discovery.KubernetesClientInformerReactiveDiscoveryClient;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -152,8 +152,8 @@ class DiscoveryServerApplicationContextTests {
 	static class TestConfig {
 
 		@Bean
-		KubernetesInformerReactiveDiscoveryClient discoveryClient() {
-			return Mockito.mock(KubernetesInformerReactiveDiscoveryClient.class);
+		KubernetesClientInformerReactiveDiscoveryClient discoveryClient() {
+			return Mockito.mock(KubernetesClientInformerReactiveDiscoveryClient.class);
 		}
 
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.endpoint.SanitizableData;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -34,7 +35,9 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 	@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = SanitizeApp.class,
 			properties = { "spring.main.cloud-platform=KUBERNETES", "spring.cloud.bootstrap.enabled=true",
 					"management.endpoints.web.exposure.include=*", "spring.cloud.bootstrap.name=sanitize",
-					"bootstrap.sanitize=true", "spring.cloud.kubernetes.client.namespace=test" })
+					"bootstrap.sanitize=true", "spring.cloud.kubernetes.client.namespace=test",
+					"spring.cloud.kubernetes.secrets.enabled=true" })
+	@AutoConfigureWebTestClient
 	@Nested
 	class DefaultSettingsTest {
 
@@ -47,7 +50,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 		@Test
 		void test() {
 			// configmap is sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -56,7 +59,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo(SanitizableData.SANITIZED_VALUE);
 
 			// secret is sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -65,7 +68,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo(SanitizableData.SANITIZED_VALUE);
 
 			// secret is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/secret", this.port)
 				.exchange()
 				.expectStatus()
@@ -75,7 +78,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo("sanitizeSecretValue");
 
 			// configmap is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/configmap", this.port)
 				.exchange()
 				.expectStatus()
@@ -92,7 +95,8 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 			properties = { "spring.main.cloud-platform=KUBERNETES", "spring.cloud.bootstrap.enabled=true",
 					"management.endpoints.web.exposure.include=*", "spring.cloud.bootstrap.name=sanitize",
 					"management.endpoint.configprops.show-values=NEVER", "bootstrap.sanitize=true",
-					"spring.cloud.kubernetes.client.namespace=test" })
+					"spring.cloud.kubernetes.client.namespace=test", "spring.cloud.kubernetes.secrets.enabled=true" })
+	@AutoConfigureWebTestClient
 	@Nested
 	class ExplicitNever {
 
@@ -105,7 +109,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 		@Test
 		void test() {
 			// configmap is sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -116,7 +120,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo(SanitizableData.SANITIZED_VALUE);
 
 			// secret is sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -127,7 +131,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo(SanitizableData.SANITIZED_VALUE);
 
 			// secret is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/secret", this.port)
 				.exchange()
 				.expectStatus()
@@ -137,7 +141,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo("sanitizeSecretValue");
 
 			// configmap is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/configmap", this.port)
 				.exchange()
 				.expectStatus()
@@ -164,7 +168,8 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 					"management.endpoints.web.exposure.include=*", "spring.cloud.bootstrap.name=sanitize",
 					"management.endpoint.configprops.show-values=ALWAYS",
 					"spring.cloud.kubernetes.sanitize.secrets=false", "bootstrap.sanitize=true",
-					"spring.cloud.kubernetes.client.namespace=test" })
+					"spring.cloud.kubernetes.client.namespace=test", "spring.cloud.kubernetes.secrets.enabled=true" })
+	@AutoConfigureWebTestClient
 	@Nested
 	class AlwaysWithoutSanitizingFunction {
 
@@ -177,7 +182,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 		@Test
 		void test() {
 			// configmap is not sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -188,7 +193,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo("sanitizeConfigMapValue");
 
 			// secret is not sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -199,7 +204,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo("sanitizeSecretValue");
 
 			// secret is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/secret", this.port)
 				.exchange()
 				.expectStatus()
@@ -209,7 +214,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo("sanitizeSecretValue");
 
 			// configmap is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/configmap", this.port)
 				.exchange()
 				.expectStatus()
@@ -236,7 +241,8 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 					"management.endpoints.web.exposure.include=*", "spring.cloud.bootstrap.name=sanitize-two",
 					"management.endpoint.configprops.show-values=ALWAYS",
 					"spring.cloud.kubernetes.sanitize.secrets=true", "bootstrap.sanitize=true",
-					"spring.cloud.kubernetes.client.namespace=test" })
+					"spring.cloud.kubernetes.client.namespace=test", "spring.cloud.kubernetes.secrets.enabled=true" })
+	@AutoConfigureWebTestClient
 	@Nested
 	class AlwaysWithSanitizingFunction {
 
@@ -249,7 +255,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 		@Test
 		void test() {
 			// configmap is not sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -260,7 +266,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo("sanitizeConfigMapValue");
 
 			// first secret is sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -271,7 +277,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo(SanitizableData.SANITIZED_VALUE);
 
 			// second secret is sanitized
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/actuator/configprops", this.port)
 				.accept(MediaType.APPLICATION_JSON)
 				.exchange()
@@ -282,7 +288,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo(SanitizableData.SANITIZED_VALUE);
 
 			// secret is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/secret", this.port)
 				.exchange()
 				.expectStatus()
@@ -292,7 +298,7 @@ class BootstrapKubernetesClientSanitizeConfigpropsEndpointTests {
 				.isEqualTo("sanitizeSecretValue");
 
 			// configmap is usable from configuration properties
-			webClient.get()
+			this.webClient.get()
 				.uri("http://localhost:{port}/configmap", this.port)
 				.exchange()
 				.expectStatus()

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,17 +34,7 @@ import org.springframework.util.StringUtils;
 /**
  * @author Ryan Baxter
  */
-public class KubernetesClientPodUtils implements PodUtils<V1Pod> {
-
-	/**
-	 * Hostname environment variable name.
-	 */
-	public static final String HOSTNAME = "HOSTNAME";
-
-	/**
-	 * KUBERNETES_SERVICE_HOST environment variable name.
-	 */
-	public static final String KUBERNETES_SERVICE_HOST = "KUBERNETES_SERVICE_HOST";
+final class KubernetesClientPodUtils implements PodUtils<V1Pod> {
 
 	private static final Log LOG = LogFactory.getLog(KubernetesClientPodUtils.class);
 
@@ -60,30 +50,16 @@ public class KubernetesClientPodUtils implements PodUtils<V1Pod> {
 
 	private final boolean failFast;
 
-	@Deprecated(forRemoval = true)
-	public KubernetesClientPodUtils(CoreV1Api client, String namespace) {
-		if (client == null) {
-			throw new IllegalArgumentException("Must provide an instance of KubernetesClient");
-		}
-
-		this.client = client;
-		this.hostName = EnvReader.getEnv(HOSTNAME);
-		this.serviceHost = EnvReader.getEnv(KUBERNETES_SERVICE_HOST);
-		this.current = LazilyInstantiate.using(this::internalGetPod);
-		this.namespace = namespace;
-		this.failFast = false;
-	}
-
 	// mainly needed for the health and info contributors, so that they report DOWN
 	// correctly
-	public KubernetesClientPodUtils(CoreV1Api client, String namespace, boolean failFast) {
+	KubernetesClientPodUtils(CoreV1Api client, String namespace, boolean failFast) {
 		if (client == null) {
 			throw new IllegalArgumentException("Must provide an instance of KubernetesClient");
 		}
 
 		this.client = client;
-		this.hostName = EnvReader.getEnv(HOSTNAME);
-		this.serviceHost = EnvReader.getEnv(KUBERNETES_SERVICE_HOST);
+		this.hostName = EnvReader.getEnv("HOSTNAME");
+		this.serviceHost = EnvReader.getEnv("KUBERNETES_SERVICE_HOST");
 		this.current = LazilyInstantiate.using(this::internalGetPod);
 		this.namespace = namespace;
 		this.failFast = failFast;
@@ -104,7 +80,7 @@ public class KubernetesClientPodUtils implements PodUtils<V1Pod> {
 			if (isServiceHostEnvVarPresent() && isHostNameEnvVarPresent() && isServiceAccountFound()) {
 				LOG.debug("reading pod in namespace : " + namespace);
 				// The hostname of your pod is typically also its name.
-				return client.readNamespacedPod(hostName, namespace, null);
+				return client.readNamespacedPod(hostName, namespace).execute();
 			}
 		}
 		catch (Throwable t) {

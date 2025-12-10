@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,13 @@ import org.springframework.cloud.autoconfigure.RefreshAutoConfiguration;
 import org.springframework.cloud.bootstrap.BootstrapConfiguration;
 import org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadPropertiesAutoConfiguration;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * @author Haytham Mohamed
  **/
-class KubernetesConfigTestBase {
+@TestPropertySource(properties = "spring.cloud.kubernetes.secrets.enabled=true")
+abstract class KubernetesConfigTestBase {
 
 	private ConfigurableApplicationContext context;
 

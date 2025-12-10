@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.cloud.kubernetes.commons.config.Constants;
 import org.springframework.cloud.kubernetes.fabric8.config.TestApplication;
 import org.springframework.test.context.ActiveProfiles;
@@ -40,12 +41,10 @@ import static org.springframework.cloud.kubernetes.fabric8.config.ConfigMapTestU
 		properties = { "spring.application.name=configmap-with-active-profile-name-example",
 				"spring.cloud.kubernetes.reload.enabled=false", "spring.main.cloud-platform=KUBERNETES" })
 @ActiveProfiles("development")
+@AutoConfigureWebTestClient
 abstract class ConfigMapsWithActiveProfilesName {
 
 	private static final String APPLICATION_NAME = "configmap-with-active-profile-name-example";
-
-	@Autowired(required = false)
-	Config config;
 
 	@Autowired
 	private WebTestClient webClient;

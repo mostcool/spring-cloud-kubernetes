@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2025 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 
 		// sleep for 5 seconds
 		LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(5));
-		Assertions.assertThat(rightProperties.getValue()).isEqualTo("right-initial");
+		Assertions.assertThat(rightProperties.getValue()).isEqualTo("right-after-change");
 
 		// then deploy a new version of right-configmap-with-label
 		// but only add a label, this does not trigger a refresh

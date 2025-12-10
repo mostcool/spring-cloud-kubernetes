@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.springframework.cloud.kubernetes.client.config.boostrap.stubs;
+package org.springframework.cloud.kubernetes.client.config.bootstrap.stubs;
 
 import java.util.Map;
 
@@ -92,10 +92,10 @@ public class BootstrapKubernetesClientSanitizeEnvEndpointStub {
 		secretList.addItemsItem(secretTwo);
 
 		WireMock.stubFor(WireMock.get("/api/v1/namespaces/test/configmaps")
-			.willReturn(WireMock.aResponse().withStatus(200).withBody(new JSON().serialize(configMapList))));
+			.willReturn(WireMock.aResponse().withStatus(200).withBody(JSON.serialize(configMapList))));
 
 		WireMock.stubFor(WireMock.get("/api/v1/namespaces/test/secrets")
-			.willReturn(WireMock.aResponse().withStatus(200).withBody(new JSON().serialize(secretList))));
+			.willReturn(WireMock.aResponse().withStatus(200).withBody(JSON.serialize(secretList))));
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,11 +68,6 @@ public abstract class AbstractKubernetesInfoContributor implements InfoContribut
 	 * Host IP key.
 	 */
 	public static final String HOST_IP = "hostIp";
-
-	/**
-	 * Labels key.
-	 */
-	public static final String LABELS = "labels";
 
 	private static final Log LOG = LogFactory.getLog(AbstractKubernetesInfoContributor.class);
 

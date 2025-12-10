@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,15 +35,13 @@ import org.springframework.cloud.kubernetes.commons.EnvReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * @author wind57
  */
 class KubernetesClientPodUtilsTests {
-
-	private static final String KUBERNETES_SERVICE_HOST = KubernetesClientPodUtils.KUBERNETES_SERVICE_HOST;
-
-	private static final String HOSTNAME = KubernetesClientPodUtils.HOSTNAME;
 
 	private static final String SERVICE_ACCOUNT_TOKEN_PATH = Config.SERVICEACCOUNT_TOKEN_PATH;
 
@@ -55,15 +53,15 @@ class KubernetesClientPodUtilsTests {
 
 	private static final V1Pod POD = new V1Pod();
 
-	private final CoreV1Api client = Mockito.mock(CoreV1Api.class);
+	private final CoreV1Api client = mock(CoreV1Api.class);
 
-	private final Path tokenPath = Mockito.mock(Path.class);
+	private final Path tokenPath = mock(Path.class);
 
-	private final File tokenFile = Mockito.mock(File.class);
+	private final File tokenFile = mock(File.class);
 
-	private final Path certPath = Mockito.mock(Path.class);
+	private final Path certPath = mock(Path.class);
 
-	private final File certFile = Mockito.mock(File.class);
+	private final File certFile = mock(File.class);
 
 	private MockedStatic<EnvReader> envReader;
 
@@ -148,27 +146,29 @@ class KubernetesClientPodUtilsTests {
 	}
 
 	private void mockHost(String host) {
-		envReader.when(() -> EnvReader.getEnv(KUBERNETES_SERVICE_HOST)).thenReturn(host);
+		envReader.when(() -> EnvReader.getEnv("KUBERNETES_SERVICE_HOST")).thenReturn(host);
 	}
 
 	private void mockHostname(String name) {
-		envReader.when(() -> EnvReader.getEnv(HOSTNAME)).thenReturn(name);
+		envReader.when(() -> EnvReader.getEnv("HOSTNAME")).thenReturn(name);
 	}
 
 	private void mockTokenPath(boolean result) {
-		Mockito.when(tokenPath.toFile()).thenReturn(tokenFile);
-		Mockito.when(tokenFile.exists()).thenReturn(result);
+		when(tokenPath.toFile()).thenReturn(tokenFile);
+		when(tokenFile.exists()).thenReturn(result);
 		paths.when(() -> Paths.get(SERVICE_ACCOUNT_TOKEN_PATH)).thenReturn(tokenPath);
 	}
 
 	private void mockCertPath(boolean result) {
-		Mockito.when(certPath.toFile()).thenReturn(certFile);
-		Mockito.when(certFile.exists()).thenReturn(result);
+		when(certPath.toFile()).thenReturn(certFile);
+		when(certFile.exists()).thenReturn(result);
 		paths.when(() -> Paths.get(SERVICE_ACCOUNT_CERT_PATH)).thenReturn(certPath);
 	}
 
 	private void mockPodResult() throws ApiException {
-		Mockito.when(client.readNamespacedPod(POD_HOSTNAME, "namespace", null)).thenReturn(POD);
+		CoreV1Api.APIreadNamespacedPodRequest request = mock(CoreV1Api.APIreadNamespacedPodRequest.class);
+		when(request.execute()).thenReturn(POD);
+		when(client.readNamespacedPod(POD_HOSTNAME, "namespace")).thenReturn(request);
 	}
 
 }

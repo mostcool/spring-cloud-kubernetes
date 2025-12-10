@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,21 +18,17 @@ package org.springframework.cloud.kubernetes.configserver;
 
 import org.junit.jupiter.api.Test;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.cloud.config.server.environment.EnvironmentRepository;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.cloud.kubernetes.configserver.configurations.ThirdConfig;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
-@SpringJUnitConfig
-@SpringBootTest
+@SpringBootTest(classes = ThirdConfig.class, properties = "test.third.config.enabled=true")
 class KubernetesEnvironmentRepositoryFactoryTests {
 
-	@MockBean
+	@Autowired
 	private KubernetesEnvironmentRepository mockRepository;
 
 	@Test
@@ -45,22 +41,6 @@ class KubernetesEnvironmentRepositoryFactoryTests {
 		assertThat(repository).isNotNull();
 		assertThat(repository).isInstanceOf(KubernetesEnvironmentRepository.class);
 		assertThat(repository).isSameAs(mockRepository);
-	}
-
-	@Configuration
-	static class TestConfig {
-
-		@Bean
-		public KubernetesEnvironmentRepository kubernetesEnvironmentRepository() {
-			return mock(KubernetesEnvironmentRepository.class);
-		}
-
-		@Bean
-		public KubernetesEnvironmentRepositoryFactory kubernetesEnvironmentRepositoryFactory(
-				KubernetesEnvironmentRepository kubernetesEnvironmentRepository) {
-			return new KubernetesEnvironmentRepositoryFactory(kubernetesEnvironmentRepository);
-		}
-
 	}
 
 }

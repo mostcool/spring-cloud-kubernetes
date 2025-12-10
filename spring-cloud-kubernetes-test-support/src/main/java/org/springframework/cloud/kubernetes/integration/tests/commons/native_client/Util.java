@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import java.net.HttpURLConnection;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -53,12 +52,12 @@ import io.kubernetes.client.util.Yaml;
 import jakarta.annotation.Nullable;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.assertj.core.api.Assertions;
 import org.testcontainers.k3s.K3sContainer;
 
 import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
 
-import static org.assertj.core.api.Fail.fail;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.loadImage;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.pomVersion;
@@ -109,7 +108,7 @@ public final class Util {
 			boolean changeVersion) {
 		try {
 
-			coreV1Api.createNamespacedService(namespace, service, null, null, null, null);
+			coreV1Api.createNamespacedService(namespace, service).execute();
 
 			if (deployment != null) {
 				String imageFromDeployment = deployment.getSpec()
@@ -132,7 +131,7 @@ public final class Util {
 					loadImage(image[0], image[1], name, container);
 				}
 
-				appsV1Api.createNamespacedDeployment(namespace, deployment, null, null, null, null);
+				appsV1Api.createNamespacedDeployment(namespace, deployment).execute();
 				waitForDeployment(namespace, deployment);
 			}
 
@@ -148,49 +147,50 @@ public final class Util {
 	public void createAndWait(String namespace, @Nullable V1ConfigMap configMap, @Nullable V1Secret secret) {
 		try {
 			if (configMap != null) {
-				coreV1Api.createNamespacedConfigMap(namespace, configMap, null, null, null, null);
+				coreV1Api.createNamespacedConfigMap(namespace, configMap).execute();
 				waitForConfigMap(namespace, configMap, Phase.CREATE);
 			}
 
 			if (secret != null) {
-				coreV1Api.createNamespacedSecret(namespace, secret, null, null, null, null);
+				coreV1Api.createNamespacedSecret(namespace, secret).execute();
 				waitForSecret(namespace, secret, Phase.CREATE);
 			}
-
 		}
-		catch (ApiException e) {
+		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+
 	}
 
 	public void deleteAndWait(String namespace, @Nullable V1ConfigMap configMap, @Nullable V1Secret secret) {
 		try {
 			if (configMap != null) {
 				String configMapName = configMapName(configMap);
-				coreV1Api.deleteNamespacedConfigMap(configMapName, namespace, null, null, null, null, null, null);
+				coreV1Api.deleteNamespacedConfigMap(configMapName, namespace).execute();
 				waitForConfigMap(namespace, configMap, Phase.DELETE);
 			}
 
 			if (secret != null) {
 				String secretName = secretName(secret);
-				coreV1Api.deleteNamespacedSecret(secretName, namespace, null, null, null, null, null, null);
+				coreV1Api.deleteNamespacedSecret(secretName, namespace).execute();
 				waitForSecret(namespace, secret, Phase.DELETE);
 			}
-
 		}
-		catch (ApiException e) {
+		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+
 	}
 
 	public void createNamespace(String name) {
 		try {
-			coreV1Api.createNamespace(new V1NamespaceBuilder().withNewMetadata().withName(name).and().build(), null,
-					null, null, null);
+			coreV1Api.createNamespace(new V1NamespaceBuilder().withNewMetadata().withName(name).and().build())
+				.execute();
 		}
-		catch (ApiException e) {
+		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+
 	}
 
 	public void deleteAndWait(String namespace, V1Deployment deployment, V1Service service) {
@@ -198,22 +198,22 @@ public final class Util {
 		try {
 			if (deployment != null) {
 				String deploymentName = deploymentName(deployment);
-				Map<String, String> podLabels = appsV1Api.readNamespacedDeployment(deploymentName, namespace, null)
+				Map<String, String> podLabels = appsV1Api.readNamespacedDeployment(deploymentName, namespace)
+					.execute()
 					.getSpec()
 					.getTemplate()
 					.getMetadata()
 					.getLabels();
-				appsV1Api.deleteNamespacedDeployment(deploymentName, namespace, null, null, null, null, null, null);
-				coreV1Api.deleteCollectionNamespacedPod(namespace, null, null, null, null, null,
-						labelSelector(podLabels), null, null, null, null, null, null, null, null);
+				appsV1Api.deleteNamespacedDeployment(deploymentName, namespace).execute();
+				coreV1Api.deleteCollectionNamespacedPod(namespace).labelSelector(labelSelector(podLabels)).execute();
 				waitForDeploymentToBeDeleted(deploymentName, namespace);
 				waitForDeploymentPodsToBeDeleted(podLabels, namespace);
 			}
 
 			if (service != null) {
 				service.getMetadata().setNamespace(namespace);
-				coreV1Api.deleteNamespacedService(service.getMetadata().getName(), service.getMetadata().getNamespace(),
-						null, null, null, null, null, null);
+				coreV1Api.deleteNamespacedService(service.getMetadata().getName(), service.getMetadata().getNamespace())
+					.execute();
 				waitForServiceToBeDeleted(service.getMetadata().getName(), namespace);
 			}
 
@@ -293,19 +293,21 @@ public final class Util {
 		try {
 			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("setup/service-account.yaml");
 			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api
-				.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), namespace, null);
+				.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), namespace)
+				.execute();
 			CheckedSupplier<V1ServiceAccount> accountDefaulter = () -> coreV1Api
-				.createNamespacedServiceAccount(namespace, serviceAccount, null, null, null, null);
+				.createNamespacedServiceAccount(namespace, serviceAccount)
+				.execute();
 			notExistsHandler(accountSupplier, accountDefaulter);
 
 			V1RoleBinding roleBinding = (V1RoleBinding) yaml("setup/role-binding.yaml");
 			notExistsHandler(
-					() -> rbacApi.readNamespacedRoleBinding(roleBinding.getMetadata().getName(), namespace, null),
-					() -> rbacApi.createNamespacedRoleBinding(namespace, roleBinding, null, null, null, null));
+					() -> rbacApi.readNamespacedRoleBinding(roleBinding.getMetadata().getName(), namespace).execute(),
+					() -> rbacApi.createNamespacedRoleBinding(namespace, roleBinding).execute());
 
 			V1Role role = (V1Role) yaml("setup/role.yaml");
-			notExistsHandler(() -> rbacApi.readNamespacedRole(role.getMetadata().getName(), namespace, null),
-					() -> rbacApi.createNamespacedRole(namespace, role, null, null, null, null));
+			notExistsHandler(() -> rbacApi.readNamespacedRole(role.getMetadata().getName(), namespace).execute(),
+					() -> rbacApi.createNamespacedRole(namespace, role).execute());
 		}
 		catch (Exception e) {
 			throw new RuntimeException(e);
@@ -318,23 +320,25 @@ public final class Util {
 		try {
 			V1ServiceAccount serviceAccount = (V1ServiceAccount) yaml("cluster/service-account.yaml");
 			CheckedSupplier<V1ServiceAccount> accountSupplier = () -> coreV1Api
-				.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace, null);
+				.readNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace)
+				.execute();
 			CheckedSupplier<V1ServiceAccount> accountDefaulter = () -> coreV1Api
-				.createNamespacedServiceAccount(serviceAccountNamespace, serviceAccount, null, null, null, null);
+				.createNamespacedServiceAccount(serviceAccountNamespace, serviceAccount)
+				.execute();
 			notExistsHandler(accountSupplier, accountDefaulter);
 
 			V1ClusterRole clusterRole = (V1ClusterRole) yaml("cluster/cluster-role.yaml");
-			notExistsHandler(() -> rbacApi.readClusterRole(clusterRole.getMetadata().getName(), null),
-					() -> rbacApi.createClusterRole(clusterRole, null, null, null, null));
+			notExistsHandler(() -> rbacApi.readClusterRole(clusterRole.getMetadata().getName()).execute(),
+					() -> rbacApi.createClusterRole(clusterRole).execute());
 
 			V1RoleBinding roleBinding = (V1RoleBinding) yaml("cluster/role-binding.yaml");
 			namespaces.forEach(namespace -> {
 				roleBinding.getMetadata().setNamespace(namespace);
 				try {
 					notExistsHandler(
-							() -> rbacApi.readNamespacedRoleBinding(roleBinding.getMetadata().getName(), namespace,
-									null),
-							() -> rbacApi.createNamespacedRoleBinding(namespace, roleBinding, null, null, null, null));
+							() -> rbacApi.readNamespacedRoleBinding(roleBinding.getMetadata().getName(), namespace)
+								.execute(),
+							() -> rbacApi.createNamespacedRoleBinding(namespace, roleBinding).execute());
 				}
 				catch (Exception e) {
 					throw new RuntimeException(e);
@@ -353,14 +357,13 @@ public final class Util {
 			V1ClusterRole clusterRole = (V1ClusterRole) yaml("cluster/cluster-role.yaml");
 			V1RoleBinding roleBinding = (V1RoleBinding) yaml("cluster/role-binding.yaml");
 
-			coreV1Api.deleteNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace,
-					null, null, null, null, null, null);
-			rbacApi.deleteClusterRole(clusterRole.getMetadata().getName(), null, null, null, null, null, null);
+			coreV1Api.deleteNamespacedServiceAccount(serviceAccount.getMetadata().getName(), serviceAccountNamespace)
+				.execute();
+			rbacApi.deleteClusterRole(clusterRole.getMetadata().getName()).execute();
 			namespaces.forEach(namespace -> {
 				roleBinding.getMetadata().setNamespace(namespace);
 				try {
-					rbacApi.deleteNamespacedRoleBinding(roleBinding.getMetadata().getName(), namespace, null, null,
-							null, null, null, null);
+					rbacApi.deleteNamespacedRoleBinding(roleBinding.getMetadata().getName(), namespace).execute();
 				}
 				catch (Exception e) {
 					throw new RuntimeException(e);
@@ -384,8 +387,7 @@ public final class Util {
 		ApiregistrationV1Api apiInstance = new ApiregistrationV1Api(coreV1Api.getApiClient());
 		List<V1APIService> apiServices;
 		try {
-			apiServices = apiInstance.listAPIService(null, null, null, null, null, null, null, null, null, null, null)
-				.getItems();
+			apiServices = apiInstance.listAPIService().execute().getItems();
 
 			apiServices.stream()
 				.map(apiService -> apiService.getMetadata().getName())
@@ -393,15 +395,14 @@ public final class Util {
 				.findFirst()
 				.ifPresent(apiServiceName -> {
 					try {
-						apiInstance.deleteAPIService(apiServiceName, null, null, null, null, null, null);
+						apiInstance.deleteAPIService(apiServiceName).execute();
 					}
 					catch (ApiException e) {
-						System.out.println(e.getResponseBody());
 						throw new RuntimeException(e);
 					}
 				});
 
-			coreV1Api.deleteNamespace(name, null, null, null, null, null, null);
+			coreV1Api.deleteNamespace(name).execute();
 		}
 		catch (ApiException e) {
 			System.out.println(e.getResponseBody());
@@ -410,7 +411,8 @@ public final class Util {
 
 		await().pollInterval(Duration.ofSeconds(1))
 			.atMost(30, TimeUnit.SECONDS)
-			.until(() -> coreV1Api.listNamespace(null, null, null, null, null, null, null, null, null, null, null)
+			.until(() -> coreV1Api.listNamespace()
+				.execute()
 				.getItems()
 				.stream()
 				.noneMatch(x -> x.getMetadata().getName().equals(name)));
@@ -442,6 +444,19 @@ public final class Util {
 
 	}
 
+	public void configWatcher(Phase phase) {
+
+		V1Deployment deployment = (V1Deployment) yaml("config-watcher/deployment.yaml");
+		V1Service service = (V1Service) yaml("config-watcher/service.yaml");
+
+		if (phase.equals(Phase.CREATE)) {
+			createAndWait("default", deployment.getMetadata().getName(), deployment, service, true);
+		}
+		else if (phase.equals(Phase.DELETE)) {
+			deleteAndWait("default", deployment, service);
+		}
+	}
+
 	private String deploymentName(V1Deployment deployment) {
 		return deployment.getMetadata().getName();
 	}
@@ -465,16 +480,34 @@ public final class Util {
 	private void waitForConfigMap(String namespace, V1ConfigMap configMap, Phase phase) {
 		String configMapName = configMapName(configMap);
 		await().pollInterval(Duration.ofSeconds(1)).atMost(600, TimeUnit.SECONDS).until(() -> {
-			try {
-				coreV1Api.readNamespacedConfigMap(configMapName, namespace, null);
-				return phase.equals(Phase.CREATE);
-			}
-			catch (ApiException e) {
-				if (e.getCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-					return !phase.equals(Phase.CREATE);
-
+			if (phase == Phase.DELETE) {
+				try {
+					coreV1Api.readNamespacedConfigMap(configMapName, namespace).execute();
 				}
-				throw new RuntimeException(e);
+				catch (ApiException apiException) {
+					if (apiException.getCode() == 404) {
+						// a 404 here means it was deleted
+						return true;
+					}
+					throw new RuntimeException(apiException);
+				}
+				// if we did not get an ApiException, we still have the resource,
+				// retry as such, because we want it deleted
+				return false;
+			}
+			else {
+				try {
+					coreV1Api.readNamespacedConfigMap(configMapName, namespace).execute();
+				}
+				catch (ApiException apiException) {
+					if (apiException.getCode() == 404) {
+						// we want it created, but it's not yet
+						return false;
+					}
+					throw new RuntimeException(apiException);
+				}
+				// if we did not get an ApiException, we have the resource created
+				return true;
 			}
 		});
 	}
@@ -482,15 +515,34 @@ public final class Util {
 	private void waitForSecret(String namespace, V1Secret secret, Phase phase) {
 		String secretName = secretName(secret);
 		await().pollInterval(Duration.ofSeconds(1)).atMost(600, TimeUnit.SECONDS).until(() -> {
-			try {
-				coreV1Api.readNamespacedSecret(secretName, namespace, null);
-				return phase.equals(Phase.CREATE);
-			}
-			catch (ApiException e) {
-				if (e.getCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-					return !phase.equals(Phase.CREATE);
+			if (phase == Phase.DELETE) {
+				try {
+					coreV1Api.readNamespacedSecret(secretName, namespace).execute();
 				}
-				throw new RuntimeException(e);
+				catch (ApiException apiException) {
+					if (apiException.getCode() == 404) {
+						// a 404 here means it was deleted
+						return true;
+					}
+					throw new RuntimeException(apiException);
+				}
+				// if we did not get an ApiException, we still have the resource,
+				// retry as such, because we want it deleted
+				return false;
+			}
+			else {
+				try {
+					coreV1Api.readNamespacedSecret(secretName, namespace).execute();
+				}
+				catch (ApiException apiException) {
+					if (apiException.getCode() == 404) {
+						// we want it created, but it's not yet
+						return false;
+					}
+					throw new RuntimeException(apiException);
+				}
+				// if we did not get an ApiException, we have the resource created
+				return true;
 			}
 		});
 	}
@@ -498,7 +550,7 @@ public final class Util {
 	private void waitForDeploymentToBeDeleted(String deploymentName, String namespace) {
 		await().timeout(Duration.ofSeconds(180)).until(() -> {
 			try {
-				appsV1Api.readNamespacedDeployment(deploymentName, namespace, null);
+				appsV1Api.readNamespacedDeployment(deploymentName, namespace).execute();
 				return false;
 			}
 			catch (ApiException e) {
@@ -513,7 +565,7 @@ public final class Util {
 	private void waitForServiceToBeDeleted(String serviceName, String namespace) {
 		await().timeout(Duration.ofSeconds(180)).until(() -> {
 			try {
-				coreV1Api.readNamespacedService(serviceName, namespace, null);
+				coreV1Api.readNamespacedService(serviceName, namespace).execute();
 				return false;
 			}
 			catch (ApiException e) {
@@ -528,9 +580,9 @@ public final class Util {
 	private void waitForDeploymentPodsToBeDeleted(Map<String, String> labels, String namespace) {
 		await().timeout(Duration.ofSeconds(180)).until(() -> {
 			try {
-				int currentNumberOfPods = coreV1Api
-					.listNamespacedPod(namespace, null, null, null, null, labelSelector(labels), null, null, null, null,
-							null, null)
+				int currentNumberOfPods = coreV1Api.listNamespacedPod(namespace)
+					.labelSelector(labelSelector(labels))
+					.execute()
 					.getItems()
 					.size();
 				return currentNumberOfPods == 0;
@@ -545,10 +597,11 @@ public final class Util {
 	}
 
 	private boolean isDeploymentReady(String deploymentName, String namespace) throws ApiException {
-		V1DeploymentList deployments = appsV1Api.listNamespacedDeployment(namespace, null, null, null,
-				"metadata.name=" + deploymentName, null, null, null, null, null, null, null);
+		V1DeploymentList deployments = appsV1Api.listNamespacedDeployment(namespace)
+			.fieldSelector("metadata.name=" + deploymentName)
+			.execute();
 		if (deployments.getItems().isEmpty()) {
-			fail("No deployments with the name " + deploymentName);
+			Assertions.fail("No deployments with the name " + deploymentName);
 		}
 		V1Deployment deployment = deployments.getItems().get(0);
 		if (deployment.getStatus() != null) {
@@ -572,39 +625,6 @@ public final class Util {
 				LOG.info("Deployment Condition Reason: " + condition.getReason());
 			}
 		}
-	}
-
-	private static boolean isDeploymentReadyAfterPatch(String deploymentName, String namespace,
-			Map<String, String> podLabels) throws ApiException {
-
-		V1DeploymentList deployments = new AppsV1Api().listNamespacedDeployment(namespace, null, null, null,
-				"metadata.name=" + deploymentName, null, null, null, null, null, null, null);
-		if (deployments.getItems().isEmpty()) {
-			fail("No deployment with name " + deploymentName);
-		}
-
-		V1Deployment deployment = deployments.getItems().get(0);
-		// if no replicas are defined, it means only 1 is needed
-		int replicas = Optional.ofNullable(deployment.getSpec().getReplicas()).orElse(1);
-		int readyReplicas = Optional.ofNullable(deployment.getStatus().getReadyReplicas()).orElse(0);
-
-		if (readyReplicas != replicas) {
-			LOG.info("ready replicas not yet same as replicas");
-			return false;
-		}
-
-		int pods = new CoreV1Api()
-			.listNamespacedPod(namespace, null, null, null, null, labelSelector(podLabels), null, null, null, null,
-					null, null)
-			.getItems()
-			.size();
-
-		if (pods != replicas) {
-			LOG.info("number of pods not yet stabilized");
-			return false;
-		}
-
-		return true;
 	}
 
 	private static <T> void notExistsHandler(CheckedSupplier<T> callee, CheckedSupplier<T> defaulter) throws Exception {

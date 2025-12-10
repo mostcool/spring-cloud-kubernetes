@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,15 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
-
-import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 		properties = { "spring.main.cloud-platform=KUBERNETES", "spring.cloud.kubernetes.leader.autoStartup=false",
 				"management.endpoints.web.exposure.include=info", "management.endpoint.info.show-details=always",
 				"management.info.kubernetes.enabled=true" })
+@AutoConfigureWebTestClient
 class Fabric8LeaderAutoConfigurationTests {
 
 	@LocalManagementPort
@@ -52,8 +52,13 @@ class Fabric8LeaderAutoConfigurationTests {
 			.exchange()
 			.expectStatus()
 			.isOk()
-			.expectBody(String.class)
-			.value(containsString("kubernetes"));
+			.expectBody()
+			.jsonPath("kubernetes")
+			.exists()
+			.jsonPath("leaderElection")
+			.exists()
+			.jsonPath("leaderElection.leaderId")
+			.exists();
 	}
 
 	@SpringBootConfiguration

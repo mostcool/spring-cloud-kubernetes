@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2025 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import java.io.StringReader;
 import java.time.Duration;
 
 import io.kubernetes.client.openapi.ApiClient;
-import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1ConfigMap;
 import io.kubernetes.client.openapi.models.V1Deployment;
@@ -89,10 +88,10 @@ abstract class K8sClientReloadBase {
 	protected static void replaceConfigMap(CoreV1Api api, V1ConfigMap configMap) {
 		try {
 			api.replaceNamespacedConfigMap(configMap.getMetadata().getName(), configMap.getMetadata().getNamespace(),
-					configMap, null, null, null, null);
+					configMap)
+				.execute();
 		}
-		catch (ApiException e) {
-			System.out.println(e.getResponseBody());
+		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}

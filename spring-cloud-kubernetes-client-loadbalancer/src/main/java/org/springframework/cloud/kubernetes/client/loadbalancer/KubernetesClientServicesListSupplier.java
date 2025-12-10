@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,32 +57,34 @@ public class KubernetesClientServicesListSupplier extends KubernetesServicesList
 
 	@Override
 	public Flux<List<ServiceInstance>> get() {
-		List<ServiceInstance> result = new ArrayList<>();
-		String serviceName = getServiceId();
-		LOG.debug(() -> "serviceID : " + serviceName);
+		return Flux.defer(() -> {
+			List<ServiceInstance> result = new ArrayList<>();
+			String serviceName = getServiceId();
+			LOG.debug(() -> "serviceID : " + serviceName);
 
-		if (discoveryProperties.allNamespaces()) {
-			LOG.debug(() -> "discovering services in all namespaces");
-			List<V1Service> services = services(null, serviceName);
-			services.forEach(service -> addMappedService(mapper, result, service));
-		}
-		else if (!discoveryProperties.namespaces().isEmpty()) {
-			List<String> selectiveNamespaces = discoveryProperties.namespaces().stream().sorted().toList();
-			LOG.debug(() -> "discovering services in selective namespaces : " + selectiveNamespaces);
-			selectiveNamespaces.forEach(selectiveNamespace -> {
-				List<V1Service> services = services(selectiveNamespace, serviceName);
+			if (discoveryProperties.allNamespaces()) {
+				LOG.debug(() -> "discovering services in all namespaces");
+				List<V1Service> services = services(null, serviceName);
 				services.forEach(service -> addMappedService(mapper, result, service));
-			});
-		}
-		else {
-			String namespace = getApplicationNamespace(null, "loadbalancer-service", kubernetesNamespaceProvider);
-			LOG.debug(() -> "discovering services in namespace : " + namespace);
-			List<V1Service> services = services(namespace, serviceName);
-			services.forEach(service -> addMappedService(mapper, result, service));
-		}
+			}
+			else if (!discoveryProperties.namespaces().isEmpty()) {
+				List<String> selectiveNamespaces = discoveryProperties.namespaces().stream().sorted().toList();
+				LOG.debug(() -> "discovering services in selective namespaces : " + selectiveNamespaces);
+				selectiveNamespaces.forEach(selectiveNamespace -> {
+					List<V1Service> services = services(selectiveNamespace, serviceName);
+					services.forEach(service -> addMappedService(mapper, result, service));
+				});
+			}
+			else {
+				String namespace = getApplicationNamespace(null, "loadbalancer-service", kubernetesNamespaceProvider);
+				LOG.debug(() -> "discovering services in namespace : " + namespace);
+				List<V1Service> services = services(namespace, serviceName);
+				services.forEach(service -> addMappedService(mapper, result, service));
+			}
 
-		LOG.debug(() -> "found services : " + result);
-		return Flux.defer(() -> Flux.just(result));
+			LOG.debug(() -> "found services : " + result);
+			return Flux.just(result);
+		});
 	}
 
 	private void addMappedService(KubernetesServiceInstanceMapper<V1Service> mapper, List<ServiceInstance> services,
@@ -93,9 +95,9 @@ public class KubernetesClientServicesListSupplier extends KubernetesServicesList
 	private List<V1Service> services(String namespace, String serviceName) {
 		if (namespace == null) {
 			try {
-				return coreV1Api
-					.listServiceForAllNamespaces(null, null, "metadata.name=" + serviceName, null, null, null, null,
-							null, null, null, null)
+				return coreV1Api.listServiceForAllNamespaces()
+					.fieldSelector("metadata.name=" + serviceName)
+					.execute()
 					.getItems();
 			}
 			catch (ApiException apiException) {
@@ -106,9 +108,9 @@ public class KubernetesClientServicesListSupplier extends KubernetesServicesList
 		else {
 			try {
 				// there is going to be a single service here, if found
-				return coreV1Api
-					.listNamespacedService(namespace, null, null, null, "metadata.name=" + serviceName, null, null,
-							null, null, null, null, null)
+				return coreV1Api.listNamespacedService(namespace)
+					.fieldSelector("metadata.name=" + serviceName)
+					.execute()
 					.getItems();
 			}
 			catch (ApiException apiException) {

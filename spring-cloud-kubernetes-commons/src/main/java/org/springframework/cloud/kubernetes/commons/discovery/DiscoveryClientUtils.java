@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2023 the original author or authors.
+ * Copyright 2019-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,6 +157,16 @@ public final class DiscoveryClientUtils {
 		return new DefaultKubernetesServiceInstance(data.instanceId(), serviceMetadata.name(), data.host(),
 				portData.portNumber(), serviceInstanceMetadata, secured, serviceMetadata.namespace(), null,
 				podMetadata);
+	}
+
+	public static ServiceInstance externalNameServiceInstance(ServiceMetadata serviceMetadata,
+			Supplier<InstanceIdHostPodName> instanceIdAndHost, Map<String, String> serviceInstanceMetadata) {
+
+		InstanceIdHostPodName data = instanceIdAndHost.get();
+
+		return new ExternalNameKubernetesServiceInstance(serviceMetadata.name(), data.host(), data.instanceId(),
+				serviceInstanceMetadata);
+
 	}
 
 	/**

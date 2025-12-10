@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@
 package org.springframework.cloud.kubernetes.discoveryserver;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.informer.cache.Lister;
+import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.CoreV1EndpointPort;
 import io.kubernetes.client.openapi.models.V1EndpointAddress;
 import io.kubernetes.client.openapi.models.V1EndpointSubset;
@@ -36,9 +38,9 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.cloud.kubernetes.client.discovery.KubernetesInformerDiscoveryClient;
-import org.springframework.cloud.kubernetes.client.discovery.reactive.HandleToReactiveDiscoveryClient;
-import org.springframework.cloud.kubernetes.client.discovery.reactive.KubernetesInformerReactiveDiscoveryClient;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.cloud.kubernetes.client.discovery.KubernetesClientInformerReactiveDiscoveryClient;
+import org.springframework.cloud.kubernetes.client.discovery.VisibleKubernetesClientInformerDiscoveryClient;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
 import org.springframework.cloud.kubernetes.commons.discovery.DefaultKubernetesServiceInstance;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
@@ -58,6 +60,7 @@ import static org.mockito.Mockito.when;
 				"management.endpoint.health.group.liveness.include=livenessState",
 				"management.health.readinessstate.enabled=true",
 				"management.endpoint.health.group.readiness.include=readinessState" })
+@AutoConfigureWebTestClient
 class DiscoveryServerIntegrationAppsNameEndpointTests {
 
 	private static final String NAMESPACE = "namespace";
@@ -94,7 +97,7 @@ class DiscoveryServerIntegrationAppsNameEndpointTests {
 				TEST_ENDPOINTS.getSubsets().get(0).getAddresses().get(0).getTargetRef().getUid(),
 				TEST_SERVICE.getMetadata().getName(), TEST_ENDPOINTS.getSubsets().get(0).getAddresses().get(0).getIp(),
 				TEST_ENDPOINTS.getSubsets().get(0).getPorts().get(0).getPort(), metadata, false,
-				TEST_SERVICE.getMetadata().getNamespace(), null);
+				TEST_SERVICE.getMetadata().getNamespace(), null, Map.of());
 
 		webTestClient.get()
 			.uri("/apps/test-svc-3")
@@ -115,17 +118,18 @@ class DiscoveryServerIntegrationAppsNameEndpointTests {
 		}
 
 		@Bean
-		KubernetesInformerReactiveDiscoveryClient discoveryClient() {
-			return new HandleToReactiveDiscoveryClient(kubernetesInformerDiscoveryClient());
+		KubernetesClientInformerReactiveDiscoveryClient discoveryClient() {
+			return new KubernetesClientInformerReactiveDiscoveryClient(kubernetesInformerDiscoveryClient());
 		}
 
-		private KubernetesInformerDiscoveryClient kubernetesInformerDiscoveryClient() {
+		private VisibleKubernetesClientInformerDiscoveryClient kubernetesInformerDiscoveryClient() {
 
 			Lister<V1Service> serviceLister = Util.setupServiceLister(TEST_SERVICE);
 			Lister<V1Endpoints> endpointsLister = Util.setupEndpointsLister(TEST_ENDPOINTS);
 
-			return new KubernetesInformerDiscoveryClient(SHARED_INFORMER_FACTORY, serviceLister, endpointsLister, null,
-					null, KubernetesDiscoveryProperties.DEFAULT);
+			return new VisibleKubernetesClientInformerDiscoveryClient(List.of(SHARED_INFORMER_FACTORY),
+					List.of(serviceLister), List.of(endpointsLister), null, null, KubernetesDiscoveryProperties.DEFAULT,
+					Mockito.mock(CoreV1Api.class), x -> true);
 		}
 
 	}

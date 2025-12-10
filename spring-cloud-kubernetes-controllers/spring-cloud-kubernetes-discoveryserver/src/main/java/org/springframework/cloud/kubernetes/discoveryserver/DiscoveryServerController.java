@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import org.springframework.cloud.client.ServiceInstance;
-import org.springframework.cloud.kubernetes.client.discovery.reactive.KubernetesInformerReactiveDiscoveryClient;
+import org.springframework.cloud.kubernetes.client.discovery.KubernetesClientInformerReactiveDiscoveryClient;
 import org.springframework.cloud.kubernetes.commons.discovery.DefaultKubernetesServiceInstance;
 import org.springframework.cloud.kubernetes.commons.discovery.Service;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,9 +33,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class DiscoveryServerController {
 
-	private final KubernetesInformerReactiveDiscoveryClient reactiveDiscoveryClient;
+	private final KubernetesClientInformerReactiveDiscoveryClient reactiveDiscoveryClient;
 
-	public DiscoveryServerController(KubernetesInformerReactiveDiscoveryClient reactiveDiscoveryClient) {
+	public DiscoveryServerController(KubernetesClientInformerReactiveDiscoveryClient reactiveDiscoveryClient) {
 		this.reactiveDiscoveryClient = reactiveDiscoveryClient;
 	}
 
@@ -53,17 +53,8 @@ public class DiscoveryServerController {
 		return reactiveDiscoveryClient.getInstances(name);
 	}
 
-	/**
-	 * use the "appInstanceNonDeprecated" instead.
-	 */
-	@Deprecated(forRemoval = true)
-	@GetMapping("/app/{name}/{instanceId}")
-	public Mono<ServiceInstance> appInstance(@PathVariable String name, @PathVariable String instanceId) {
-		return innerAppInstance(name, instanceId);
-	}
-
 	@GetMapping("/apps/{name}/{instanceId}")
-	Mono<ServiceInstance> appInstanceNonDeprecated(@PathVariable String name, @PathVariable String instanceId) {
+	Mono<ServiceInstance> appInstance(@PathVariable String name, @PathVariable String instanceId) {
 		return innerAppInstance(name, instanceId);
 	}
 

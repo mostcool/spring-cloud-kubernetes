@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.kubernetes.fabric8.config.labeled_secret_with_profile.properties.Blue;
 import org.springframework.cloud.kubernetes.fabric8.config.labeled_secret_with_profile.properties.Green;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_secret_with_profile.properties.GreenPurple;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_secret_with_profile.properties.GreenPurpleK8s;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_secret_with_profile.properties.GreenSecretK8s;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_secret_with_profile.properties.GreenSecretProd;
 
 @SpringBootApplication
-@EnableConfigurationProperties({ Blue.class, Green.class })
+@EnableConfigurationProperties({ Blue.class, Green.class, GreenSecretK8s.class, GreenSecretProd.class,
+		GreenPurple.class, GreenPurpleK8s.class })
 public class LabeledSecretWithProfileApp {
 
 	public static void main(String[] args) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,20 +137,20 @@ class KubernetesClientServicesListSupplierTests {
 		Set<String> selectiveNamespaces = Set.of();
 		KubernetesDiscoveryProperties discoveryProperties = new KubernetesDiscoveryProperties(true, allNamespaces,
 				selectiveNamespaces, true, 60, false, null, Set.of(443, 8443, 12345), Map.of(), null,
-				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true);
+				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true, false, null);
 
 		KubernetesClientServicesListSupplier listSupplier = new KubernetesClientServicesListSupplier(env, mapper,
 				discoveryProperties, coreV1Api, kubernetesNamespaceProvider);
 
 		stubFor(get(urlEqualTo("/api/v1/namespaces/default/services?fieldSelector=metadata.name%3Dservice-a"))
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(SINGLE_NAMESPACE_SERVICES))));
+			.willReturn(aResponse().withStatus(200).withBody(JSON.serialize(SINGLE_NAMESPACE_SERVICES))));
 
 		Flux<List<ServiceInstance>> instances = listSupplier.get();
 
 		Map<String, String> metadata = Map.of("org.springframework.cloud", "true", "beta", "true", "k8s_namespace",
 				"default", "type", "V1Service");
 		DefaultKubernetesServiceInstance serviceA = new DefaultKubernetesServiceInstance("0", "service-a",
-				"service-a.default.svc.cluster.local", 80, metadata, false);
+				"service-a.default.svc.cluster.local", 80, metadata, false, null, null, Map.of());
 		List<ServiceInstance> services = new ArrayList<>();
 		services.add(serviceA);
 
@@ -174,7 +174,7 @@ class KubernetesClientServicesListSupplierTests {
 		Set<String> selectiveNamespaces = Set.of();
 		KubernetesDiscoveryProperties discoveryProperties = new KubernetesDiscoveryProperties(true, allNamespaces,
 				selectiveNamespaces, true, 60, false, null, Set.of(443, 8443, 12345), Map.of(), null,
-				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true);
+				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true, false, null);
 
 		KubernetesClientServicesListSupplier listSupplier = new KubernetesClientServicesListSupplier(env, mapper,
 				discoveryProperties, coreV1Api, kubernetesNamespaceProvider);
@@ -201,7 +201,7 @@ class KubernetesClientServicesListSupplierTests {
 		Set<String> selectiveNamespaces = Set.of();
 		KubernetesDiscoveryProperties discoveryProperties = new KubernetesDiscoveryProperties(true, allNamespaces,
 				selectiveNamespaces, true, 60, false, null, Set.of(443, 8443, 12345), Map.of(), null,
-				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true);
+				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true, false, null);
 
 		CoreV1Api coreV1Api = new CoreV1Api();
 		KubernetesClientServiceInstanceMapper mapper = new KubernetesClientServiceInstanceMapper(
@@ -211,16 +211,17 @@ class KubernetesClientServicesListSupplierTests {
 				discoveryProperties, coreV1Api, kubernetesNamespaceProvider);
 
 		stubFor(get(urlEqualTo("/api/v1/services?fieldSelector=metadata.name%3Dservice-a"))
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(SERVICE_LIST_ALL_NAMESPACE))));
+			.willReturn(aResponse().withStatus(200).withBody(JSON.serialize(SERVICE_LIST_ALL_NAMESPACE))));
 
 		Flux<List<ServiceInstance>> instances = listSupplier.get();
 
 		Map<String, String> metadata = Map.of("org.springframework.cloud", "true", "beta", "true", "k8s_namespace",
 				"default", "type", "V1Service");
 		DefaultKubernetesServiceInstance serviceADefaultNamespace = new DefaultKubernetesServiceInstance("0",
-				"service-a", "service-a.default.svc.cluster.local", 80, metadata, false);
+				"service-a", "service-a.default.svc.cluster.local", 80, metadata, false, null, null, Map.of());
 		DefaultKubernetesServiceInstance serviceATestNamespace = new DefaultKubernetesServiceInstance("1", "service-a",
-				"service-a.test.svc.cluster.local", 80, Map.of("k8s_namespace", "test", "type", "V1Service"), false);
+				"service-a.test.svc.cluster.local", 80, Map.of("k8s_namespace", "test", "type", "V1Service"), false,
+				null, null, Map.of());
 		List<ServiceInstance> services = new ArrayList<>();
 		services.add(serviceADefaultNamespace);
 		services.add(serviceATestNamespace);
@@ -238,7 +239,7 @@ class KubernetesClientServicesListSupplierTests {
 		Set<String> selectiveNamespaces = Set.of("default", "test", "no-service");
 		KubernetesDiscoveryProperties discoveryProperties = new KubernetesDiscoveryProperties(true, allNamespaces,
 				selectiveNamespaces, true, 60, false, null, Set.of(443, 8443, 12345), Map.of(), null,
-				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true);
+				KubernetesDiscoveryProperties.Metadata.DEFAULT, 0, true, false, null);
 
 		CoreV1Api coreV1Api = new CoreV1Api();
 		KubernetesClientServiceInstanceMapper mapper = new KubernetesClientServiceInstanceMapper(
@@ -249,11 +250,10 @@ class KubernetesClientServicesListSupplierTests {
 
 		stubFor(get(urlEqualTo("/api/v1/namespaces/default/services?fieldSelector=metadata.name%3Dservice-a"))
 			.willReturn(aResponse().withStatus(200)
-				.withBody(new JSON().serialize(SERVICE_A_DEFAULT_NAMESPACE_SELECTIVE_NAMESPACES))));
+				.withBody(JSON.serialize(SERVICE_A_DEFAULT_NAMESPACE_SELECTIVE_NAMESPACES))));
 
-		stubFor(get(urlEqualTo("/api/v1/namespaces/test/services?fieldSelector=metadata.name%3Dservice-a"))
-			.willReturn(aResponse().withStatus(200)
-				.withBody(new JSON().serialize(SERVICE_A_TEST_NAMESPACE_SELECTIVE_NAMESPACES))));
+		stubFor(get(urlEqualTo("/api/v1/namespaces/test/services?fieldSelector=metadata.name%3Dservice-a")).willReturn(
+				aResponse().withStatus(200).withBody(JSON.serialize(SERVICE_A_TEST_NAMESPACE_SELECTIVE_NAMESPACES))));
 
 		stubFor(get(urlEqualTo("/api/v1/namespaces/no-service/services?fieldSelector=metadata.name%3Dservice-a"))
 			.willReturn(aResponse().withStatus(404)));
@@ -263,9 +263,10 @@ class KubernetesClientServicesListSupplierTests {
 		Map<String, String> metadata = Map.of("org.springframework.cloud", "true", "beta", "true", "k8s_namespace",
 				"default", "type", "V1Service");
 		DefaultKubernetesServiceInstance serviceADefaultNamespace = new DefaultKubernetesServiceInstance("0",
-				"service-a", "service-a.default.svc.cluster.local", 80, metadata, false);
+				"service-a", "service-a.default.svc.cluster.local", 80, metadata, false, null, null, Map.of());
 		DefaultKubernetesServiceInstance serviceATestNamespace = new DefaultKubernetesServiceInstance("1", "service-a",
-				"service-a.test.svc.cluster.local", 80, Map.of("k8s_namespace", "test", "type", "V1Service"), false);
+				"service-a.test.svc.cluster.local", 80, Map.of("k8s_namespace", "test", "type", "V1Service"), false,
+				null, null, Map.of());
 		List<ServiceInstance> services = new ArrayList<>();
 		services.add(serviceADefaultNamespace);
 		services.add(serviceATestNamespace);

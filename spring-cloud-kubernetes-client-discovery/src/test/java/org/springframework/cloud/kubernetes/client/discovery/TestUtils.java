@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,26 @@ package org.springframework.cloud.kubernetes.client.discovery;
 
 import java.util.List;
 
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.kubernetes.client.informer.SharedIndexInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.informer.cache.Lister;
+import io.kubernetes.client.openapi.JSON;
 import io.kubernetes.client.openapi.models.V1Endpoints;
+import io.kubernetes.client.openapi.models.V1EndpointsList;
+import io.kubernetes.client.openapi.models.V1ListMeta;
+import io.kubernetes.client.openapi.models.V1ObjectMeta;
 import io.kubernetes.client.openapi.models.V1Service;
+import io.kubernetes.client.openapi.models.V1ServiceList;
 
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.ResolvableType;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -35,41 +45,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author wind57
  */
-public final class TestUtils {
+final class TestUtils {
 
 	private TestUtils() {
 
 	}
 
-	public static void assertSelectiveNamespacesBeansMissing(AssertableApplicationContext context) {
-		String[] sharedInformerFactoriesBeanName = context
-			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<List<SharedInformerFactory>>() {
-			}));
-		assertThat(sharedInformerFactoriesBeanName).isEmpty();
-
-		String[] serviceSharedIndexInformersBeanName = context.getBeanNamesForType(
-				ResolvableType.forType(new ParameterizedTypeReference<List<SharedIndexInformer<V1Service>>>() {
-				}));
-		assertThat(serviceSharedIndexInformersBeanName).isEmpty();
-
-		String[] endpointsSharedIndexInformersBeanName = context.getBeanNamesForType(
-				ResolvableType.forType(new ParameterizedTypeReference<List<SharedIndexInformer<V1Endpoints>>>() {
-				}));
-		assertThat(endpointsSharedIndexInformersBeanName).isEmpty();
-
-		String[] serviceListersBeanName = context
-			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<List<Lister<V1Service>>>() {
-			}));
-		assertThat(serviceListersBeanName).isEmpty();
-
-		String[] endpointsListersBeanName = context
-			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<List<Lister<V1Endpoints>>>() {
-			}));
-		assertThat(endpointsListersBeanName).isEmpty();
-	}
-
 	@SuppressWarnings("unchecked")
-	public static void assertSelectiveNamespacesBeansPresent(AssertableApplicationContext context, int times) {
+	static void assertInformerBeansPresent(AssertableApplicationContext context, int times) {
 		String sharedInformerFactoriesBeanName = context
 			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<List<SharedInformerFactory>>() {
 			}))[0];
@@ -105,57 +88,70 @@ public final class TestUtils {
 		assertThat(endpointsListers.size()).isEqualTo(times);
 	}
 
-	@SuppressWarnings("unchecked")
-	public static void assertNonSelectiveNamespacesBeansPresent(AssertableApplicationContext context) {
-		assertThat(context).hasSingleBean(SharedInformerFactory.class);
+	static void assertInformerBeansMissing(AssertableApplicationContext context) {
+		String[] sharedInformerFactoriesBeanName = context
+			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<List<SharedInformerFactory>>() {
+			}));
+		assertThat(sharedInformerFactoriesBeanName).isEmpty();
 
-		String serviceSharedIndexInformerBeanName = context.getBeanNamesForType(
-				ResolvableType.forType(new ParameterizedTypeReference<SharedIndexInformer<V1Service>>() {
-				}))[0];
-		SharedIndexInformer<V1Service> serviceSharedIndexInformer = (SharedIndexInformer<V1Service>) context
-			.getBean(serviceSharedIndexInformerBeanName);
-		assertThat(serviceSharedIndexInformer).isNotNull();
+		String[] serviceSharedIndexInformersBeanName = context.getBeanNamesForType(
+				ResolvableType.forType(new ParameterizedTypeReference<List<SharedIndexInformer<V1Service>>>() {
+				}));
+		assertThat(serviceSharedIndexInformersBeanName).isEmpty();
 
-		String endpointSharedIndexInformerBeanName = context.getBeanNamesForType(
-				ResolvableType.forType(new ParameterizedTypeReference<SharedIndexInformer<V1Endpoints>>() {
-				}))[0];
-		SharedIndexInformer<V1Endpoints> endpointsSharedIndexInformer = (SharedIndexInformer<V1Endpoints>) context
-			.getBean(endpointSharedIndexInformerBeanName);
-		assertThat(endpointsSharedIndexInformer).isNotNull();
+		String[] endpointsSharedIndexInformersBeanName = context.getBeanNamesForType(
+				ResolvableType.forType(new ParameterizedTypeReference<List<SharedIndexInformer<V1Endpoints>>>() {
+				}));
+		assertThat(endpointsSharedIndexInformersBeanName).isEmpty();
 
-		String serviceListerBeanName = context
-			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<Lister<V1Service>>() {
-			}))[0];
-		Lister<V1Service> serviceLister = (Lister<V1Service>) context.getBean(serviceListerBeanName);
-		assertThat(serviceLister).isNotNull();
+		String[] serviceListersBeanName = context
+			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<List<Lister<V1Service>>>() {
+			}));
+		assertThat(serviceListersBeanName).isEmpty();
 
-		String endpointsListerBeanName = context
-			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<Lister<V1Endpoints>>() {
-			}))[0];
-		Lister<V1Endpoints> endpointsLister = (Lister<V1Endpoints>) context.getBean(endpointsListerBeanName);
-		assertThat(endpointsLister).isNotNull();
+		String[] endpointsListersBeanName = context
+			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<List<Lister<V1Endpoints>>>() {
+			}));
+		assertThat(endpointsListersBeanName).isEmpty();
 	}
 
-	public static void assertNonSelectiveNamespacesBeansMissing(AssertableApplicationContext context) {
-		String[] serviceSharedIndexInformerBeanName = context.getBeanNamesForType(
-				ResolvableType.forType(new ParameterizedTypeReference<SharedIndexInformer<V1Service>>() {
-				}));
-		assertThat(serviceSharedIndexInformerBeanName).isEmpty();
+	static void mockEndpointsAndServices(List<String> namespaces, WireMockExtension server) {
+		namespaces.forEach(namespace -> {
+			mockEndpointsCall(namespace, server);
+			mockServicesCall(namespace, server);
+		});
+	}
 
-		String[] endpointSharedIndexInformerBeanName = context.getBeanNamesForType(
-				ResolvableType.forType(new ParameterizedTypeReference<SharedIndexInformer<V1Endpoints>>() {
-				}));
-		assertThat(endpointSharedIndexInformerBeanName).isEmpty();
+	private static void mockEndpointsCall(String namespace, WireMockExtension server) {
 
-		String[] serviceListerBeanName = context
-			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<Lister<V1Service>>() {
-			}));
-		assertThat(serviceListerBeanName).isEmpty();
+		// watch=false, first call to populate watcher cache
+		server.stubFor(WireMock.get(urlMatching("^/api/v1/namespaces/" + namespace + "/endpoints.*"))
+			.withQueryParam("watch", equalTo("false"))
+			.willReturn(WireMock.aResponse()
+				.withStatus(200)
+				.withBody(JSON.serialize(new V1EndpointsList().metadata(new V1ListMeta().resourceVersion("0"))
+					.addItemsItem(new V1Endpoints().metadata(new V1ObjectMeta().namespace(namespace)))))));
 
-		String[] endpointsListerBeanName = context
-			.getBeanNamesForType(ResolvableType.forType(new ParameterizedTypeReference<Lister<V1Endpoints>>() {
-			}));
-		assertThat(endpointsListerBeanName).isEmpty();
+		// watch=true, call to re-sync
+		server.stubFor(WireMock.get(urlMatching("^/api/v1/namespaces/" + namespace + "/endpoints.*"))
+			.withQueryParam("watch", WireMock.equalTo("true"))
+			.willReturn(aResponse().withStatus(200).withBody("")));
+	}
+
+	private static void mockServicesCall(String namespace, WireMockExtension server) {
+
+		// watch=false, first call to populate watcher cache
+		server.stubFor(WireMock.get(urlMatching("^/api/v1/namespaces/" + namespace + "/services.*"))
+			.withQueryParam("watch", equalTo("false"))
+			.willReturn(WireMock.aResponse()
+				.withStatus(200)
+				.withBody(JSON.serialize(new V1ServiceList().metadata(new V1ListMeta().resourceVersion("0"))
+					.addItemsItem(new V1Service().metadata(new V1ObjectMeta().namespace(namespace)))))));
+
+		// watch=true, call to re-sync
+		server.stubFor(WireMock.get(urlMatching("^/api/v1/namespaces/" + namespace + "/services.*"))
+			.withQueryParam("watch", equalTo("true"))
+			.willReturn(aResponse().withStatus(200).withBody("")));
 	}
 
 }

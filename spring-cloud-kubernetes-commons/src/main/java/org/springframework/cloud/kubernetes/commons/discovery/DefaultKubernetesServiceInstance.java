@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,11 @@
 
 package org.springframework.cloud.kubernetes.commons.discovery;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryConstants.HTTP;
 import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryConstants.HTTPS;
@@ -34,27 +37,10 @@ import static org.springframework.cloud.kubernetes.commons.discovery.KubernetesD
  * @param namespace the namespace of the service.
  * @param cluster the cluster the service resides in.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record DefaultKubernetesServiceInstance(String instanceId, String serviceId, String host, int port,
 		Map<String, String> metadata, boolean secure, String namespace, String cluster,
-		Map<String, Map<String, String>> podMetadata) implements KubernetesServiceInstance {
-
-	/**
-	 * @param instanceId the id of the instance.
-	 * @param serviceId the id of the service.
-	 * @param host the address where the service instance can be found.
-	 * @param port the port on which the service is running.
-	 * @param metadata a map containing metadata.
-	 * @param secure indicates whether the connection needs to be secure.
-	 */
-	public DefaultKubernetesServiceInstance(String instanceId, String serviceId, String host, int port,
-			Map<String, String> metadata, boolean secure) {
-		this(instanceId, serviceId, host, port, metadata, secure, null, null, Map.of());
-	}
-
-	public DefaultKubernetesServiceInstance(String instanceId, String serviceId, String host, int port,
-			Map<String, String> metadata, boolean secure, String namespace, String cluster) {
-		this(instanceId, serviceId, host, port, metadata, secure, namespace, cluster, Map.of());
-	}
+		Map<String, Map<String, String>> podMetadata) implements KubernetesServiceInstance, Serializable {
 
 	@Override
 	public String getInstanceId() {

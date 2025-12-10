@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2024 the original author or authors.
+ * Copyright 2012-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
  */
 final class TestAssertions {
 
-	private static final String REACTIVE_STATUS = "$.components.reactiveDiscoveryClients.components.['Fabric8 Kubernetes Reactive Discovery Client'].status";
+	private static final String REACTIVE_STATUS = "$.components.reactiveDiscoveryClients.components.['Fabric8 Reactive Discovery Client'].status";
 
 	private static final String BLOCKING_STATUS = "$.components.discoveryComposite.components.discoveryClient.status";
 
@@ -111,7 +111,7 @@ final class TestAssertions {
 			.isEqualTo(Map.of("k8s_namespace", "default", "type", "ExternalName"));
 		assertThat(externalNameInstance.isSecure()).isFalse();
 		assertThat(externalNameInstance.getUri().toASCIIString()).isEqualTo("spring.io");
-		assertThat(externalNameInstance.getScheme()).isEqualTo("http");
+		assertThat(externalNameInstance.getScheme()).isNull();
 	}
 
 	/**
@@ -179,7 +179,7 @@ final class TestAssertions {
 		assertThat(BASIC_JSON_TESTER.from(healthResult)).extractingJsonPathStringValue(REACTIVE_STATUS).isEqualTo("UP");
 
 		assertThat(BASIC_JSON_TESTER.from(healthResult)).extractingJsonPathArrayValue(
-				"$.components.reactiveDiscoveryClients.components.['Fabric8 Kubernetes Reactive Discovery Client'].details.services")
+				"$.components.reactiveDiscoveryClients.components.['Fabric8 Reactive Discovery Client'].details.services")
 			.containsExactlyInAnyOrder("kubernetes", "busybox-service");
 
 		assertThat(BASIC_JSON_TESTER.from(healthResult)).doesNotHaveJsonPath(BLOCKING_STATUS);

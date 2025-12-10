@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2025 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.test.util.TestSocketUtils;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -53,7 +54,7 @@ class Fabric8ConfigServerTest {
 
 	@BeforeAll
 	static void beforeAll() {
-		wireMockServer = new WireMockServer(options().port(8888));
+		wireMockServer = new WireMockServer(options().port(TestSocketUtils.findAvailableTcpPort()));
 		wireMockServer.start();
 		WireMock.configureFor("localhost", wireMockServer.port());
 	}

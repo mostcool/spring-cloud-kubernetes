@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ public class Fabric8ServiceInstanceMapper implements KubernetesServiceInstanceMa
 		boolean secure = secure(port, service);
 
 		return new DefaultKubernetesServiceInstance(metadata.getUid(), metadata.getName(), host, port.getPort(),
-				serviceMetadata(service), secure);
+				serviceMetadata(service), secure, null, null, Map.of());
 	}
 
 	Map<String, String> serviceMetadata(Service service) {

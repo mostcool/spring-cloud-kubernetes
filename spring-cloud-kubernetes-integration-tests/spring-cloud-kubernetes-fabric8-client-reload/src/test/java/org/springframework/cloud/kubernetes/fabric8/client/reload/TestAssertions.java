@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2024 the original author or authors.
+ * Copyright 2012-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ final class TestAssertions {
 
 		InputStream deploymentStream = util.inputStream("manifests/deployment.yaml");
 		InputStream serviceStream = util.inputStream("manifests/service.yaml");
-		InputStream configMapAsStream = util.inputStream("manifests/configmap.yaml");
+		InputStream configMapAsStream = util.inputStream("manifests/configmap-configtree.yaml");
 
 		Deployment deployment = Serialization.unmarshal(deploymentStream, Deployment.class);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@
 package org.springframework.cloud.kubernetes.fabric8.config;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Supplier;
 
 import org.springframework.cloud.kubernetes.commons.config.LabeledConfigMapNormalizedSource;
 import org.springframework.cloud.kubernetes.commons.config.LabeledSourceData;
 import org.springframework.cloud.kubernetes.commons.config.MultipleSourcesContainer;
+
+import static org.springframework.cloud.kubernetes.fabric8.config.Fabric8ConfigUtils.configMapsByLabels;
 
 /**
  * Provides an implementation of {@link Fabric8ContextToSourceData} for a labeled config
@@ -55,13 +56,12 @@ final class LabeledConfigMapContextToSourceDataProvider implements Supplier<Fabr
 
 			return new LabeledSourceData() {
 				@Override
-				public MultipleSourcesContainer dataSupplier(Map<String, String> labels, Set<String> profiles) {
-					return Fabric8ConfigUtils.configMapsDataByLabels(context.client(), context.namespace(), labels,
-							context.environment(), profiles);
+				public MultipleSourcesContainer dataSupplier(Map<String, String> labels) {
+					return configMapsByLabels(context.client(), context.namespace(), labels, context.environment(),
+							context.readType());
 				}
 
-			}.compute(source.labels(), source.prefix(), source.target(), source.profileSpecificSources(),
-					source.failFast(), context.namespace(), context.environment().getActiveProfiles());
+			}.compute(source.labels(), source.prefix(), source.target(), source.failFast(), context.namespace());
 		};
 
 	}

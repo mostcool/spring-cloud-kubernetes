@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ abstract class ConfigRetryEnabled {
 
 	private static void stubConfigMapAndSecretsDefaults() {
 		// return empty config map / secret list to not fail context creation
-		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(new V1ConfigMapList()))));
+		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(new V1ConfigMapList()))));
 	}
 
 	@AfterAll
@@ -108,7 +108,7 @@ abstract class ConfigRetryEnabled {
 		V1ConfigMapList configMapList = new V1ConfigMapList()
 			.addItemsItem(new V1ConfigMap().metadata(new V1ObjectMeta().name("application")).data(data));
 
-		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(configMapList))));
+		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(configMapList))));
 
 		PropertySource<?>[] propertySource = new PropertySource<?>[1];
 		Assertions.assertThatCode(() -> propertySource[0] = propertySourceLocator.locate(new MockEnvironment()))
@@ -151,7 +151,7 @@ abstract class ConfigRetryEnabled {
 		// then succeed
 		stubFor(get(API).inScenario("Retry and Recover")
 			.whenScenarioStateIs("Failed thrice")
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(configMapList))));
+			.willReturn(aResponse().withStatus(200).withBody(JSON.serialize(configMapList))));
 
 		PropertySource<?>[] propertySource = new PropertySource<?>[1];
 		Assertions.assertThatCode(() -> propertySource[0] = propertySourceLocator.locate(new MockEnvironment()))

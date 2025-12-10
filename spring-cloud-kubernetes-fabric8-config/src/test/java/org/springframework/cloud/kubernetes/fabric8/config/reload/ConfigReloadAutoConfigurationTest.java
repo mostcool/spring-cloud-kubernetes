@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,7 +233,7 @@ class ConfigReloadAutoConfigurationTest extends KubernetesConfigTestBase {
 		setup(KubernetesClientTestConfiguration.class, "spring.cloud.kubernetes.reload.enabled=true",
 				"spring.main.cloud-platform=KUBERNETES", "spring.cloud.kubernetes.reload.monitoring-secrets=true",
 				"spring.cloud.kubernetes.reload.monitoring-configMaps=false",
-				"spring.cloud.kubernetes.reload.mode=event");
+				"spring.cloud.kubernetes.reload.mode=event", "spring.cloud.kubernetes.secrets.enabled=true");
 		Map<String, ConfigurationChangeDetector> map = getContext().getBeansOfType(ConfigurationChangeDetector.class);
 		Assertions.assertThat(map.size()).isEqualTo(1);
 		Assertions.assertThat(map.values().iterator().next().getClass())
@@ -257,7 +257,7 @@ class ConfigReloadAutoConfigurationTest extends KubernetesConfigTestBase {
 		setup(KubernetesClientTestConfiguration.class, "spring.cloud.kubernetes.reload.enabled=true",
 				"spring.main.cloud-platform=KUBERNETES", "spring.cloud.kubernetes.reload.monitoring-secrets=true",
 				"spring.cloud.kubernetes.reload.monitoring-configMaps=false",
-				"spring.cloud.kubernetes.reload.mode=polling");
+				"spring.cloud.kubernetes.reload.mode=polling", "spring.cloud.kubernetes.secrets.enabled=true");
 		Map<String, ConfigurationChangeDetector> map = getContext().getBeansOfType(ConfigurationChangeDetector.class);
 		Assertions.assertThat(map.size()).isEqualTo(1);
 		Assertions.assertThat(map.values().iterator().next().getClass())
@@ -281,7 +281,7 @@ class ConfigReloadAutoConfigurationTest extends KubernetesConfigTestBase {
 		setup(KubernetesClientTestConfiguration.class, "spring.cloud.kubernetes.reload.enabled=true",
 				"spring.main.cloud-platform=KUBERNETES", "spring.cloud.kubernetes.reload.monitoring-secrets=true",
 				"spring.cloud.kubernetes.reload.monitoring-configMaps=true",
-				"spring.cloud.kubernetes.reload.mode=event");
+				"spring.cloud.kubernetes.reload.mode=event", "spring.cloud.kubernetes.secrets.enabled=true");
 		Map<String, ConfigurationChangeDetector> map = getContext().getBeansOfType(ConfigurationChangeDetector.class);
 		Assertions.assertThat(map.size()).isEqualTo(2);
 		List<ConfigurationChangeDetector> result = map.values()
@@ -309,7 +309,7 @@ class ConfigReloadAutoConfigurationTest extends KubernetesConfigTestBase {
 		setup(KubernetesClientTestConfiguration.class, "spring.cloud.kubernetes.reload.enabled=true",
 				"spring.main.cloud-platform=KUBERNETES", "spring.cloud.kubernetes.reload.monitoring-secrets=true",
 				"spring.cloud.kubernetes.reload.monitoring-configMaps=true",
-				"spring.cloud.kubernetes.reload.mode=polling");
+				"spring.cloud.kubernetes.reload.mode=polling", "spring.cloud.kubernetes.secrets.enabled=true");
 		Map<String, ConfigurationChangeDetector> map = getContext().getBeansOfType(ConfigurationChangeDetector.class);
 		Assertions.assertThat(map.size()).isEqualTo(2);
 		List<ConfigurationChangeDetector> result = map.values()
@@ -439,7 +439,7 @@ class ConfigReloadAutoConfigurationTest extends KubernetesConfigTestBase {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	private static class KubernetesClientTestConfiguration {
+	private static final class KubernetesClientTestConfiguration {
 
 		@ConditionalOnMissingBean(KubernetesClient.class)
 		@Bean

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.cloud.kubernetes.fabric8.config.example3.MultiSecretsApp;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -36,6 +37,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = MultiSecretsApp.class,
 		properties = { "spring.cloud.bootstrap.name=multiple-secrets", "spring.main.cloud-platform=KUBERNETES" })
+@AutoConfigureWebTestClient
 abstract class MultipleSecrets {
 
 	private static final String DEFAULT_NAMESPACE = "ns1";

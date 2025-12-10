@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@
 package org.springframework.cloud.kubernetes.commons;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,6 +51,13 @@ class KubernetesCommonsAutoConfigurationTests {
 
 	@SpringBootApplication
 	static class App {
+
+		@Bean
+		public PodUtils<Object> podUtils() {
+			PodUtils<Object> podUtils = Mockito.mock(PodUtils.class);
+			Mockito.when(podUtils.currentPod()).thenReturn(Object::new);
+			return podUtils;
+		}
 
 	}
 

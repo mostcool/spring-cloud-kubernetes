@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,14 +124,14 @@ class KubernetesClientEventBasedConfigMapChangeDetectorTests {
 		stubFor(get(urlMatching("^/api/v1/namespaces/default/configmaps.*")).inScenario("watch")
 			.whenScenarioStateIs("update")
 			.withQueryParam("watch", equalTo("true"))
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(watchResponse)))
+			.willReturn(aResponse().withStatus(200).withBody(JSON.serialize(watchResponse)))
 			.willSetStateTo("add"));
 
 		stubFor(get(urlMatching("^/api/v1/namespaces/default/configmaps.*")).inScenario("watch")
 			.whenScenarioStateIs("add")
 			.withQueryParam("watch", equalTo("true"))
 			.willReturn(aResponse().withStatus(200)
-				.withBody(new JSON().serialize(new Watch.Response<>(EventType.ADDED.name(),
+				.withBody(JSON.serialize(new Watch.Response<>(EventType.ADDED.name(),
 						new V1ConfigMap().kind("ConfigMap")
 							.metadata(new V1ObjectMeta().namespace("default").name("bar3"))
 							.putDataItem(Constants.APPLICATION_PROPERTIES, "debug=true")))))
@@ -141,7 +141,7 @@ class KubernetesClientEventBasedConfigMapChangeDetectorTests {
 			.whenScenarioStateIs("delete")
 			.withQueryParam("watch", equalTo("true"))
 			.willReturn(aResponse().withStatus(200)
-				.withBody(new JSON().serialize(new Watch.Response<>(EventType.DELETED.name(),
+				.withBody(JSON.serialize(new Watch.Response<>(EventType.DELETED.name(),
 						new V1ConfigMap().kind("ConfigMap")
 							.metadata(new V1ObjectMeta().namespace("default").name("bar1"))
 							.putDataItem(Constants.APPLICATION_PROPERTIES, "debug=true")))))

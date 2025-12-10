@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,8 +80,10 @@ class ConfigUtilsProcessSourceTests {
 		MultipleSourcesContainer result = ConfigUtils.processNamedData(strippedSources, environment, sourceNames,
 				namespace, decode, includeDefaultProfileData);
 		Assertions.assertThat(result).isNotNull();
-		Assertions.assertThat(result.names()).containsExactlyInAnyOrder("configmap-a");
-		Assertions.assertThat(result.data()).containsExactlyInAnyOrderEntriesOf(Map.of("one", "1"));
+		Assertions.assertThat(result.data().keySet()).containsExactlyInAnyOrder("configmap-a");
+
+		Map<String, Object> data = result.data().get("configmap-a");
+		Assertions.assertThat(data).containsExactlyInAnyOrderEntriesOf(Map.of("one", "1"));
 	}
 
 	/**
@@ -159,7 +161,7 @@ class ConfigUtilsProcessSourceTests {
 		MultipleSourcesContainer result = ConfigUtils.processNamedData(strippedSources, environment, sourceNames,
 				namespace, decode, includeDefaultProfileData);
 		Assertions.assertThat(result).isNotNull();
-		Assertions.assertThat(result.names()).containsExactlyInAnyOrder("account");
+		Assertions.assertThat(result.data().keySet()).containsExactlyInAnyOrder("account");
 
 		/**
 		 * <pre>
@@ -173,7 +175,8 @@ class ConfigUtilsProcessSourceTests {
 		 *			since 'k8s' is not an active profile.
 		 * </pre>
 		 */
-		Assertions.assertThat(result.data())
+		Map<String, Object> data = result.data().get("account");
+		Assertions.assertThat(data)
 			.containsExactlyInAnyOrderEntriesOf(Map.of("one", "1", "two", "2", "three", "3", "five", "5"));
 		Assertions.assertThat(output.getOut()).contains("entry : account-k8s.properties will be skipped");
 	}
@@ -253,7 +256,7 @@ class ConfigUtilsProcessSourceTests {
 		MultipleSourcesContainer result = ConfigUtils.processNamedData(strippedSources, environment, sourceNames,
 				namespace, decode, includeDefaultProfileData);
 		Assertions.assertThat(result).isNotNull();
-		Assertions.assertThat(result.names()).containsExactlyInAnyOrder("account-default");
+		Assertions.assertThat(result.data().keySet()).containsExactlyInAnyOrder("account-default");
 
 		/**
 		 * <pre>
@@ -269,7 +272,8 @@ class ConfigUtilsProcessSourceTests {
 		 *		6. we do not have 'four=4' since we do not read 'account-k8s.properties'
 		 * </pre>
 		 */
-		Assertions.assertThat(result.data())
+		Map<String, Object> data = result.data().get("account-default");
+		Assertions.assertThat(data)
 			.containsExactlyInAnyOrderEntriesOf(Map.of("one", "1", "two", "2", "three", "3", "five", "5"));
 		Assertions.assertThat(output.getOut()).contains("entry : account-k8s.properties will be skipped");
 
@@ -366,14 +370,14 @@ class ConfigUtilsProcessSourceTests {
 		MultipleSourcesContainer result = ConfigUtils.processNamedData(strippedSources, environment, sourceNames,
 				namespace, decode, includeDefaultProfileData);
 		Assertions.assertThat(result).isNotNull();
-		Assertions.assertThat(result.names()).containsExactlyInAnyOrder("account");
+		Assertions.assertThat(result.data().keySet()).containsExactlyInAnyOrder("account");
 
-		/**
-		 * <pre>
-		 * 		- we only read from 'account-k8s.properties'
-		 * </pre>
+		/*
+		 * <pre> - we only read from 'account-k8s.properties' </pre>
 		 */
-		Assertions.assertThat(result.data()).containsExactlyInAnyOrderEntriesOf(Map.of("one", "1111", "four", "4"));
+
+		Map<String, Object> accountData = result.data().get("account");
+		Assertions.assertThat(accountData).containsExactlyInAnyOrderEntriesOf(Map.of("one", "1111", "four", "4"));
 		Assertions.assertThat(output.getOut()).contains("entry : account.properties will be skipped");
 		Assertions.assertThat(output.getOut()).contains("entry : account-default.properties will be skipped");
 
@@ -454,7 +458,7 @@ class ConfigUtilsProcessSourceTests {
 		MultipleSourcesContainer result = ConfigUtils.processNamedData(strippedSources, environment, sourceNames,
 				namespace, decode, includeDefaultProfileData);
 		Assertions.assertThat(result).isNotNull();
-		Assertions.assertThat(result.names()).containsExactlyInAnyOrder("account-k8s");
+		Assertions.assertThat(result.data().keySet()).containsExactlyInAnyOrder("account-k8s");
 
 		/**
 		 * <pre>
@@ -473,7 +477,8 @@ class ConfigUtilsProcessSourceTests {
 		 *			(because 'prod' is not an active profile)
 		 * </pre>
 		 */
-		Assertions.assertThat(result.data()).containsExactlyInAnyOrderEntriesOf(Map.of("one", "1111", "five", "5"));
+		Map<String, Object> data = result.data().get("account-k8s");
+		Assertions.assertThat(data).containsExactlyInAnyOrderEntriesOf(Map.of("one", "1111", "five", "5"));
 		Assertions.assertThat(output.getOut()).contains("entry : account-prod.properties will be skipped");
 		Assertions.assertThat(output.getOut()).contains("entry : account.properties will be skipped");
 		Assertions.assertThat(output.getOut()).contains("entry : account-default.properties will be skipped");

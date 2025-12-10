@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,10 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.health.ReactiveHealthContributorRegistry;
+import org.springframework.boot.health.registry.HealthContributorRegistry;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.cloud.kubernetes.fabric8.config.TestApplication;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -34,13 +35,14 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 		properties = { "management.health.kubernetes.enabled=true", "management.endpoint.health.show-details=always",
 				"management.endpoint.health.show-components=always", "management.endpoints.web.exposure.include=health",
 				"spring.cloud.kubernetes.client.namespace=default", "spring.main.cloud-platform=KUBERNETES" })
+@AutoConfigureWebTestClient
 class EnabledHealthTests {
 
 	@Autowired
 	private WebTestClient webClient;
 
 	@Autowired
-	private ReactiveHealthContributorRegistry registry;
+	private HealthContributorRegistry registry;
 
 	@LocalManagementPort
 	private int port;

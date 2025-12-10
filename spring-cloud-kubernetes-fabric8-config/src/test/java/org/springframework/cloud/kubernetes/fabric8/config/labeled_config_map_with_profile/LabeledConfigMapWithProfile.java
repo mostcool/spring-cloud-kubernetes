@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,19 @@ import java.util.Map;
 import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_config_map_with_profile.properties.Blue;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_config_map_with_profile.properties.Green;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_config_map_with_profile.properties.GreenK8s;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_config_map_with_profile.properties.GreenProd;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_config_map_with_profile.properties.GreenPurple;
+import org.springframework.cloud.kubernetes.fabric8.config.labeled_config_map_with_profile.properties.GreenPurpleK8s;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.reactive.server.WebTestClient;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author wind57
@@ -42,7 +48,22 @@ abstract class LabeledConfigMapWithProfile {
 	private static KubernetesClient mockClient;
 
 	@Autowired
-	private WebTestClient webClient;
+	private Blue blue;
+
+	@Autowired
+	private Green green;
+
+	@Autowired
+	private GreenK8s greenK8s;
+
+	@Autowired
+	private GreenProd greenProd;
+
+	@Autowired
+	private GreenPurple greenPurple;
+
+	@Autowired
+	private GreenPurpleK8s greenPurpleK8s;
 
 	/**
 	 * <pre>
@@ -54,10 +75,8 @@ abstract class LabeledConfigMapWithProfile {
 	 *     - configmap with name "green-configmap-k8s", with labels : "{color: green-k8s}"
 	 *     - configmap with name "green-configmap-prod", with labels : "{color: green-prod}"
 	 *
-	 *     # a test that proves order: first read non-profile based configmaps, thus profile based
-	 *     # configmaps override non-profile ones.
 	 *     - configmap with name "green-purple-configmap", labels "{color: green, shape: round}", data: "{eight: 8}"
-	 *     - configmap with name "green-purple-configmap-k8s", labels "{color: black}", data: "{eight: eight-ish}"
+	 *     - configmap with name "green-purple-configmap-k8s", labels "{color: green}", data: "{eight: eight-ish}"
 	 * </pre>
 	 */
 	static void setUpBeforeClass(KubernetesClient mockClient) {
@@ -74,7 +93,7 @@ abstract class LabeledConfigMapWithProfile {
 		Map<String, String> colorConfigMap = Collections.singletonMap("one", "1");
 		createConfigMap("color-configmap", colorConfigMap, Collections.singletonMap("color", "blue"));
 
-		// is not taken, since "profileSpecificSources=false" for the above
+		// is not taken
 		Map<String, String> colorConfigMapK8s = Collections.singletonMap("five", "5");
 		createConfigMap("color-configmap-k8s", colorConfigMapK8s, Collections.singletonMap("color", "not-blue"));
 
@@ -82,13 +101,13 @@ abstract class LabeledConfigMapWithProfile {
 		Map<String, String> greenConfigMap = Collections.singletonMap("two", "2");
 		createConfigMap("green-configmap", greenConfigMap, Collections.singletonMap("color", "green"));
 
-		// is taken because k8s profile is active and "profileSpecificSources=true"
+		// is taken
 		Map<String, String> greenConfigMapK8s = Collections.singletonMap("six", "6");
-		createConfigMap("green-configmap-k8s", greenConfigMapK8s, Collections.singletonMap("color", "green-k8s"));
+		createConfigMap("green-configmap-k8s", greenConfigMapK8s, Collections.singletonMap("color", "green"));
 
-		// is taken because prod profile is active and "profileSpecificSources=true"
+		// is taken
 		Map<String, String> greenConfigMapProd = Collections.singletonMap("seven", "7");
-		createConfigMap("green-configmap-prod", greenConfigMapProd, Collections.singletonMap("color", "green-prod"));
+		createConfigMap("green-configmap-prod", greenConfigMapProd, Collections.singletonMap("color", "green"));
 
 		// not taken
 		Map<String, String> redConfigMap = Collections.singletonMap("three", "3");
@@ -104,7 +123,7 @@ abstract class LabeledConfigMapWithProfile {
 
 		// is taken and thus overrides the above
 		Map<String, String> greenPurpleK8s = Collections.singletonMap("eight", "eight-ish");
-		createConfigMap("green-purple-configmap-k8s", greenPurpleK8s, Map.of("color", "black"));
+		createConfigMap("green-purple-configmap-k8s", greenPurpleK8s, Map.of("color", "green"));
 
 	}
 
@@ -123,38 +142,53 @@ abstract class LabeledConfigMapWithProfile {
 	/**
 	 * <pre>
 	 *     this one is taken from : "blue.one". We find "color-configmap" by labels, and
-	 *     "color-configmap-k8s" exists, but "includeProfileSpecificSources=false", thus not taken.
+	 *     "color-configmap-k8s" exists, but not taken.
 	 *     Since "explicitPrefix=blue", we take "blue.one"
 	 * </pre>
 	 */
 	@Test
 	void testBlue() {
-		this.webClient.get()
-			.uri("/labeled-configmap/profile/blue")
-			.exchange()
-			.expectStatus()
-			.isOk()
-			.expectBody(String.class)
-			.value(Matchers.equalTo("1"));
+		assertThat(blue.getOne()).isEqualTo("1");
 	}
 
 	/**
-	 * <pre>
-	 *   this one is taken from : "green-configmap.green-configmap-k8s.green-configmap-prod.green-purple-configmap.green-purple-configmap-k8s".
-	 *   We find "green-configmap" by labels, also "green-configmap-k8s" and "green-configmap-prod" exists,
-	 *   because "includeProfileSpecificSources=true" is set. Also "green-purple-configmap" and "green-purple-configmap-k8s"
-	 * 	 are found.
-	 * </pre>
+	 * found by labels.
 	 */
 	@Test
 	void testGreen() {
-		this.webClient.get()
-			.uri("/labeled-configmap/profile/green")
-			.exchange()
-			.expectStatus()
-			.isOk()
-			.expectBody(String.class)
-			.value(Matchers.equalTo("2#6#7#eight-ish"));
+		assertThat(green.getTwo()).isEqualTo("2");
+	}
+
+	/**
+	 * found by labels
+	 */
+	@Test
+	void testGreenK8s() {
+		assertThat(greenK8s.getSix()).isEqualTo("6");
+	}
+
+	/**
+	 * found by labels
+	 */
+	@Test
+	void testGreenProd() {
+		assertThat(greenProd.getSeven()).isEqualTo("7");
+	}
+
+	/**
+	 * found by labels.
+	 */
+	@Test
+	void testGreenPurple() {
+		assertThat(greenPurple.getEight()).isEqualTo("8");
+	}
+
+	/**
+	 * found by labels
+	 */
+	@Test
+	void testGreenPurpleK8s() {
+		assertThat(greenPurpleK8s.getEight()).isEqualTo("eight-ish");
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,8 @@ class KubernetesDiscoveryClientAutoConfigurationTests {
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 		.withConfiguration(AutoConfigurations.of(UtilAutoConfiguration.class,
 				ReactiveCommonsClientAutoConfiguration.class, KubernetesDiscoveryClientReactiveAutoConfiguration.class,
-				KubernetesDiscoveryClientBlockingAutoConfiguration.class));
+				KubernetesDiscoveryClientBlockingAutoConfiguration.class,
+				KubernetesDiscoveryClientHealthAutoConfiguration.class));
 
 	@Test
 	void shouldWorkWithDefaults() {
@@ -108,7 +109,7 @@ class KubernetesDiscoveryClientAutoConfigurationTests {
 		contextRunner
 			.withPropertyValues("spring.main.cloud-platform=KUBERNETES",
 					"spring.cloud.kubernetes.discovery.discovery-server-url=http://k8sdiscoveryserver")
-			.withClassLoader(new FilteredClassLoader("org.springframework.boot.actuate"))
+			.withClassLoader(new FilteredClassLoader("org.springframework.boot.health.actuate"))
 			.run(context -> {
 				assertThat(context).hasSingleBean(KubernetesReactiveDiscoveryClient.class);
 				assertThat(context).doesNotHaveBean(ReactiveDiscoveryClientHealthIndicator.class);

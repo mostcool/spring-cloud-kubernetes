@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -38,15 +37,16 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.cloud.kubernetes.commons.loadbalancer.KubernetesServiceInstanceMapper;
 import org.springframework.cloud.kubernetes.fabric8.loadbalancer.Fabric8ServicesListSupplier;
 import org.springframework.cloud.kubernetes.fabric8.loadbalancer.it.Util;
+import org.springframework.cloud.kubernetes.fabric8.loadbalancer.it.mode.App;
+import org.springframework.cloud.kubernetes.fabric8.loadbalancer.it.mode.LoadBalancerConfiguration;
 import org.springframework.cloud.loadbalancer.core.CachingServiceInstanceListSupplier;
 import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
 import org.springframework.cloud.loadbalancer.support.LoadBalancerClientFactory;
 import org.springframework.http.HttpMethod;
+import org.springframework.test.util.TestSocketUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
-import static org.springframework.cloud.kubernetes.fabric8.loadbalancer.it.Util.Configuration;
-import static org.springframework.cloud.kubernetes.fabric8.loadbalancer.it.Util.LoadBalancerConfiguration;
 
 /**
  * @author wind57
@@ -54,7 +54,7 @@ import static org.springframework.cloud.kubernetes.fabric8.loadbalancer.it.Util.
 @SpringBootTest(
 		properties = { "spring.cloud.kubernetes.loadbalancer.mode=SERVICE", "spring.main.cloud-platform=KUBERNETES",
 				"spring.cloud.kubernetes.discovery.all-namespaces=true" },
-		classes = { LoadBalancerConfiguration.class, Configuration.class })
+		classes = { LoadBalancerConfiguration.class, App.class })
 @ExtendWith(OutputCaptureExtension.class)
 class AllNamespacesTest {
 
@@ -62,9 +62,9 @@ class AllNamespacesTest {
 
 	private static final String SERVICE_B_URL = "http://service-b";
 
-	private static final int SERVICE_A_PORT = 8888;
+	private static final int SERVICE_A_PORT = TestSocketUtils.findAvailableTcpPort();
 
-	private static final int SERVICE_B_PORT = 8889;
+	private static final int SERVICE_B_PORT = TestSocketUtils.findAvailableTcpPort();
 
 	private static WireMockServer wireMockServer;
 
@@ -72,6 +72,7 @@ class AllNamespacesTest {
 
 	private static WireMockServer serviceBMockServer;
 
+	@SuppressWarnings("rawtypes")
 	private static final MockedStatic<KubernetesServiceInstanceMapper> MOCKED_STATIC = Mockito
 		.mockStatic(KubernetesServiceInstanceMapper.class);
 
@@ -79,7 +80,7 @@ class AllNamespacesTest {
 	private WebClient.Builder builder;
 
 	@Autowired
-	private ObjectProvider<LoadBalancerClientFactory> loadBalancerClientFactory;
+	private LoadBalancerClientFactory loadBalancerClientFactory;
 
 	@BeforeAll
 	static void beforeAll() {
@@ -96,7 +97,7 @@ class AllNamespacesTest {
 		serviceBMockServer.start();
 		WireMock.configureFor("localhost", SERVICE_B_PORT);
 
-		// we mock host creation so that it becomes something like : localhost:8888
+		// we mock host creation so that it becomes something like : localhost:<port>
 		// then wiremock can catch this request, and we can assert for the result
 		MOCKED_STATIC.when(() -> KubernetesServiceInstanceMapper.createHost("service-a", "a", "cluster.local"))
 			.thenReturn("localhost");
@@ -168,13 +169,11 @@ class AllNamespacesTest {
 		Assertions.assertThat(serviceBResult).isEqualTo("service-b-reached");
 
 		CachingServiceInstanceListSupplier supplierA = (CachingServiceInstanceListSupplier) loadBalancerClientFactory
-			.getIfAvailable()
 			.getProvider("service-a", ServiceInstanceListSupplier.class)
 			.getIfAvailable();
 		Assertions.assertThat(supplierA.getDelegate().getClass()).isSameAs(Fabric8ServicesListSupplier.class);
 
 		CachingServiceInstanceListSupplier supplierB = (CachingServiceInstanceListSupplier) loadBalancerClientFactory
-			.getIfAvailable()
 			.getProvider("service-b", ServiceInstanceListSupplier.class)
 			.getIfAvailable();
 		Assertions.assertThat(supplierB.getDelegate().getClass()).isSameAs(Fabric8ServicesListSupplier.class);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2025 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ class KubernetesClientCatalogWatchEndpointSlicesIT extends KubernetesClientCatal
 	 */
 	@Test
 	void testCatalogWatchWithEndpoints(CapturedOutput output) {
-		assertLogStatement(output, "stateGenerator is of type: KubernetesEndpointSlicesCatalogWatch");
+		assertLogStatement(output, "stateGenerator is of type: KubernetesClientEndpointSlicesCatalogWatch");
 		invokeAndAssert(util, Set.of(NAMESPACE_A, NAMESPACE_B), port, NAMESPACE_A);
 	}
 

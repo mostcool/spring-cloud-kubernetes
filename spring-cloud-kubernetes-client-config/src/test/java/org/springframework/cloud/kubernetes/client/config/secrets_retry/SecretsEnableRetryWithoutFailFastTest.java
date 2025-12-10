@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,9 +85,8 @@ public class SecretsEnableRetryWithoutFailFastTest {
 
 	private static void stubConfigMapAndSecretsDefaults() {
 		// return empty config map / secret list to not fail context creation
-		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(new V1ConfigMapList()))));
-		stubFor(get(SECRETS_API)
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(new V1SecretList()))));
+		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(new V1ConfigMapList()))));
+		stubFor(get(SECRETS_API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(new V1SecretList()))));
 	}
 
 	@AfterAll
@@ -125,7 +124,7 @@ public class SecretsEnableRetryWithoutFailFastTest {
 	public void doesNotContainRetryableSecretsPropertySourceLocator() throws Exception {
 		stubFor(get(API).willReturn(aResponse().withStatus(500).withBody("Internal Server Error")));
 		setup("debug=true", "spring.main.cloud-platform=KUBERNETES", "spring.cloud.kubernetes.test.enable-retry=true",
-				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enable-api=true");
+				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enabled=true");
 		assertThat(context.containsBean("retryableSecretsPropertySourceLocator")).isFalse();
 	}
 

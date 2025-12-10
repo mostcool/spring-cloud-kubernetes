@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,29 +38,20 @@ import static org.springframework.cloud.kubernetes.client.KubernetesClientUtils.
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnCloudPlatform(CloudPlatform.KUBERNETES)
 @AutoConfigureAfter(KubernetesCommonsAutoConfiguration.class)
-public class KubernetesClientAutoConfiguration {
+public final class KubernetesClientAutoConfiguration {
 
-	/**
-	 * this bean will be based on
-	 * {@link org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties}
-	 * in the next major release.
-	 */
-	@Deprecated(forRemoval = true)
 	@Bean
 	@ConditionalOnMissingBean
-	public ApiClient apiClient(Environment environment) {
-		ApiClient apiClient = kubernetesApiClient();
-		// it's too early to inject KubernetesClientProperties here, all its properties
-		// are missing. For the time being work-around with reading from the environment.
-		apiClient.setUserAgent(environment.getProperty("spring.cloud.kubernetes.client.user-agent",
-				KubernetesClientProperties.DEFAULT_USER_AGENT));
-		return apiClient;
+	CoreV1Api coreApi(ApiClient apiClient) {
+		return new CoreV1Api(apiClient);
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
-	public CoreV1Api coreApi(ApiClient apiClient) {
-		return new CoreV1Api(apiClient);
+	ApiClient apiClient(KubernetesClientProperties clientProperties) {
+		ApiClient apiClient = kubernetesApiClient();
+		apiClient.setUserAgent(clientProperties.userAgent());
+		return apiClient;
 	}
 
 	@Bean
@@ -71,7 +62,7 @@ public class KubernetesClientAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	public KubernetesClientPodUtils kubernetesPodUtils(CoreV1Api client,
+	KubernetesClientPodUtils kubernetesPodUtils(CoreV1Api client,
 			KubernetesNamespaceProvider kubernetesNamespaceProvider) {
 		return new KubernetesClientPodUtils(client, kubernetesNamespaceProvider.getNamespace(), true);
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ import static org.mockito.Mockito.spy;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
 		properties = { "spring.cloud.kubernetes.secrets.fail-fast=true",
 				"spring.cloud.kubernetes.secrets.retry.max-attempts=5",
-				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enable-api=true",
+				"spring.cloud.kubernetes.secrets.name=my-secret", "spring.cloud.kubernetes.secrets.enabled=true",
 				"spring.main.cloud-platform=KUBERNETES", "spring.config.import=kubernetes:" },
 		classes = SecretsRetryApplication.class)
 class SecretsRetryEnabledTests {
@@ -87,7 +87,7 @@ class SecretsRetryEnabledTests {
 
 	private static void stubConfigMapAndSecretsDefaults() {
 		// return empty config map / secret list to not fail context creation
-		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(new V1SecretList()))));
+		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(new V1SecretList()))));
 	}
 
 	@AfterAll
@@ -115,7 +115,7 @@ class SecretsRetryEnabledTests {
 		V1SecretList secretList = new V1SecretList()
 			.addItemsItem(new V1Secret().metadata(new V1ObjectMeta().name("my-secret")).data(data));
 
-		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(secretList))));
+		stubFor(get(API).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(secretList))));
 
 		final PropertySource<?>[] propertySource = new PropertySource<?>[1];
 		Assertions.assertThatCode(() -> propertySource[0] = propertySourceLocator.locate(new MockEnvironment()))
@@ -158,7 +158,7 @@ class SecretsRetryEnabledTests {
 		// then succeed
 		stubFor(get(API).inScenario("Retry and Recover")
 			.whenScenarioStateIs("Failed thrice")
-			.willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(secretList))));
+			.willReturn(aResponse().withStatus(200).withBody(JSON.serialize(secretList))));
 
 		final PropertySource<?>[] propertySource = new PropertySource<?>[1];
 		Assertions.assertThatNoException()

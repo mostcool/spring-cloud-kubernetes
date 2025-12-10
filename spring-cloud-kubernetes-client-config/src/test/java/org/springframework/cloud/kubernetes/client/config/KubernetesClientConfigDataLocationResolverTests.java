@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 package org.springframework.cloud.kubernetes.client.config;
 
-import java.util.function.Supplier;
-
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import org.assertj.core.api.Assertions;
@@ -25,13 +23,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 
-import org.springframework.boot.DefaultBootstrapContext;
+import org.springframework.boot.bootstrap.DefaultBootstrapContext;
 import org.springframework.boot.context.config.ConfigDataLocation;
 import org.springframework.boot.context.config.ConfigDataLocationResolverContext;
 import org.springframework.boot.context.config.Profiles;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
-import org.springframework.boot.logging.DeferredLogFactory;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.cloud.kubernetes.commons.KubernetesClientProperties;
@@ -49,13 +46,10 @@ import org.springframework.mock.env.MockEnvironment;
 @ExtendWith(OutputCaptureExtension.class)
 class KubernetesClientConfigDataLocationResolverTests {
 
-	private static final DeferredLogFactory FACTORY = Supplier::get;
-
 	private static final ConfigDataLocationResolverContext RESOLVER_CONTEXT = Mockito
 		.mock(ConfigDataLocationResolverContext.class);
 
-	private static final KubernetesClientConfigDataLocationResolver RESOLVER = new KubernetesClientConfigDataLocationResolver(
-			FACTORY);
+	private static final KubernetesClientConfigDataLocationResolver RESOLVER = new KubernetesClientConfigDataLocationResolver();
 
 	/*
 	 * both ConfigMapConfigProperties and SecretsConfigProperties are null, thus they are
@@ -103,6 +97,7 @@ class KubernetesClientConfigDataLocationResolverTests {
 	@Test
 	void testBothPresent() {
 		MockEnvironment environment = new MockEnvironment();
+		environment.setProperty("spring.cloud.kubernetes.secrets.enabled", "true");
 		ConfigurationPropertySources.attach(environment);
 		Binder binder = new Binder(ConfigurationPropertySources.get(environment));
 
@@ -200,6 +195,7 @@ class KubernetesClientConfigDataLocationResolverTests {
 		environment.setProperty("spring.cloud.kubernetes.config.fail-fast", "true");
 		environment.setProperty("spring.cloud.kubernetes.secrets.retry.enabled", "true");
 		environment.setProperty("spring.cloud.kubernetes.secrets.fail-fast", "true");
+		environment.setProperty("spring.cloud.kubernetes.secrets.enabled", "true");
 		ConfigurationPropertySources.attach(environment);
 		Binder binder = new Binder(ConfigurationPropertySources.get(environment));
 

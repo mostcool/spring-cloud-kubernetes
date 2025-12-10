@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2022 the original author or authors.
+ * Copyright 2012-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ import io.fabric8.kubernetes.api.model.ObjectReference;
 
 import org.springframework.cloud.kubernetes.commons.discovery.EndpointNameAndNamespace;
 
-import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.ALWAYS_TRUE;
-import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8KubernetesDiscoveryClientUtils.endpoints;
+import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8DiscoveryClientUtils.ALWAYS_TRUE;
+import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8DiscoveryClientUtils.endpoints;
 
 /**
  * Implementation that is based on Endpoints.
@@ -44,16 +44,23 @@ final class Fabric8EndpointsCatalogWatch
 		List<Endpoints> endpoints = endpoints(context.properties(), context.kubernetesClient(),
 				context.namespaceProvider(), "catalog-watcher", null, ALWAYS_TRUE);
 
-		/**
-		 * <pre>
-		 *   - An "Endpoints" holds a List of EndpointSubset.
-		 *   - A single EndpointSubset holds a List of EndpointAddress
-		 *
-		 *   - (The union of all EndpointSubsets is the Set of all Endpoints)
-		 *   - Set of Endpoints is the cartesian product of :
-		 *     EndpointSubset::getAddresses and EndpointSubset::getPorts (each is a List)
-		 * </pre>
-		 */
+		return generateState(endpoints);
+	}
+
+	/**
+	 * This one is visible for testing, especially since fabric8 mock client will save
+	 * null subsets as empty lists, thus blocking some unit test.
+	 *
+	 * <pre>
+	 *   - An "Endpoints" holds a List of EndpointSubset.
+	 *   - A single EndpointSubset holds a List of EndpointAddress
+	 *
+	 *   - (The union of all EndpointSubsets is the Set of all Endpoints)
+	 *   - Set of Endpoints is the cartesian product of :
+	 *     EndpointSubset::getAddresses and EndpointSubset::getPorts (each is a List)
+	 * </pre>
+	 */
+	List<EndpointNameAndNamespace> generateState(List<Endpoints> endpoints) {
 		Stream<ObjectReference> references = endpoints.stream()
 			.map(Endpoints::getSubsets)
 			.filter(Objects::nonNull)

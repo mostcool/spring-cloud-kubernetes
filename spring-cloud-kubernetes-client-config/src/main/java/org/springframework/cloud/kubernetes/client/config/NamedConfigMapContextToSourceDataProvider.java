@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import org.springframework.cloud.kubernetes.commons.config.ConfigUtils;
 import org.springframework.cloud.kubernetes.commons.config.MultipleSourcesContainer;
 import org.springframework.cloud.kubernetes.commons.config.NamedConfigMapNormalizedSource;
 import org.springframework.cloud.kubernetes.commons.config.NamedSourceData;
+
+import static org.springframework.cloud.kubernetes.client.config.KubernetesClientConfigUtils.configMapsByName;
 
 /**
  * Provides an implementation of {@link KubernetesClientContextToSourceData} for a named
@@ -54,8 +56,8 @@ final class NamedConfigMapContextToSourceDataProvider implements Supplier<Kubern
 
 				@Override
 				public MultipleSourcesContainer dataSupplier(LinkedHashSet<String> sourceNames) {
-					return KubernetesClientConfigUtils.configMapsDataByName(context.client(), context.namespace(),
-							sourceNames, context.environment(), context.includeDefaultProfileData());
+					return configMapsByName(context.client(), context.namespace(), sourceNames, context.environment(),
+							context.includeDefaultProfileData(), context.readType());
 				}
 			}.compute(source.name().orElseThrow(), source.prefix(), source.target(), source.profileSpecificSources(),
 					source.failFast(), context.namespace(), context.environment().getActiveProfiles());

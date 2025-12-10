@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,10 +75,8 @@ public class LabeledSecretWithProfileConfigurationStub {
 	 *     - secret with name "green-secret-k8s", with labels : "{color: green-k8s}"
 	 *     - secret with name "green-secret-prod", with labels : "{color: green-prod}"
 	 *
-	 *     # a test that proves order: first read non-profile based secrets, thus profile based
-	 *     # secrets override non-profile ones.
 	 *     - secret with name "green-purple-secret", labels "{color: green, shape: round}", data: "{eight: 8}"
-	 *     - secret with name "green-purple-secret-k8s", labels "{color: black}", data: "{eight: eight-ish}"
+	 *     - secret with name "green-purple-secret-k8s", labels "{color: green}", data: "{eight: eight-ish}"
 	 * </pre>
 	 */
 	public static void stubData() {
@@ -113,7 +111,7 @@ public class LabeledSecretWithProfileConfigurationStub {
 		V1Secret greenSecretK8s = new V1SecretBuilder()
 			.withMetadata(new V1ObjectMetaBuilder().withName("green-secret-k8s")
 				.withNamespace("spring-k8s")
-				.withLabels(Map.of("color", "green-k8s"))
+				.withLabels(Map.of("color", "green"))
 				.build())
 			.addToData(Collections.singletonMap("six", "6".getBytes(StandardCharsets.UTF_8)))
 			.build();
@@ -122,7 +120,7 @@ public class LabeledSecretWithProfileConfigurationStub {
 		V1Secret shapeSecretProd = new V1SecretBuilder()
 			.withMetadata(new V1ObjectMetaBuilder().withName("green-secret-prod")
 				.withNamespace("spring-k8s")
-				.withLabels(Map.of("color", "green-prod"))
+				.withLabels(Map.of("color", "green"))
 				.build())
 			.addToData(Collections.singletonMap("seven", "7".getBytes(StandardCharsets.UTF_8)))
 			.build();
@@ -158,7 +156,7 @@ public class LabeledSecretWithProfileConfigurationStub {
 		V1Secret greenPurpleSecretK8s = new V1SecretBuilder()
 			.withMetadata(new V1ObjectMetaBuilder().withName("green-purple-secret-k8s")
 				.withNamespace("spring-k8s")
-				.withLabels(Map.of("color", "black"))
+				.withLabels(Map.of("color", "green"))
 				.build())
 			.addToData(Collections.singletonMap("eight", "eight-ish".getBytes(StandardCharsets.UTF_8)))
 			.build();
@@ -176,7 +174,7 @@ public class LabeledSecretWithProfileConfigurationStub {
 		secrets.addItemsItem(greenPurpleSecretK8s);
 
 		WireMock.stubFor(WireMock.get("/api/v1/namespaces/spring-k8s/secrets")
-			.willReturn(WireMock.aResponse().withStatus(200).withBody(new JSON().serialize(secrets))));
+			.willReturn(WireMock.aResponse().withStatus(200).withBody(JSON.serialize(secrets))));
 	}
 
 }

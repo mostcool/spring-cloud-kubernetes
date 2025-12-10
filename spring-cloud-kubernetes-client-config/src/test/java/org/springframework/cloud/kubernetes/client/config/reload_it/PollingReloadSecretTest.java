@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.cloud.kubernetes.client.config.KubernetesClientSecretsPropertySource;
 import org.springframework.cloud.kubernetes.client.config.KubernetesClientSecretsPropertySourceLocator;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.cloud.kubernetes.commons.config.RetryProperties;
 import org.springframework.cloud.kubernetes.commons.config.SecretsConfigProperties;
 import org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadProperties;
@@ -137,7 +138,7 @@ class PollingReloadSecretTest {
 
 		V1Secret secretTwo = secret(SECRET_NAME, Map.of("a", "b"));
 		V1SecretList listTwo = new V1SecretList().addItemsItem(secretTwo);
-		stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(listTwo)))
+		stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(listTwo)))
 			.inScenario(SCENARIO_NAME)
 			.willSetStateTo("done")
 			.whenScenarioStateIs("go-to-ok"));
@@ -182,7 +183,7 @@ class PollingReloadSecretTest {
 
 			// needed so that our environment is populated with 'something'
 			// this call is done in the method that returns the AbstractEnvironment
-			stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(new JSON().serialize(listOne)))
+			stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(listOne)))
 				.inScenario(SCENARIO_NAME)
 				.whenScenarioStateIs(Scenario.STARTED)
 				.willSetStateTo("go-to-fail"));
@@ -193,8 +194,8 @@ class PollingReloadSecretTest {
 			// simulate that environment already has a
 			// KubernetesClientSecretPropertySource,
 			// otherwise we can't properly test reload functionality
-			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, Map.of(), List.of(),
-					List.of(), true, SECRET_NAME, NAMESPACE, false, true, false, RetryProperties.DEFAULT);
+			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
+					SECRET_NAME, NAMESPACE, false, true, false, RetryProperties.DEFAULT, ReadType.BATCH);
 			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(mockEnvironment);
 
 			PropertySource<?> propertySource = new KubernetesClientSecretsPropertySourceLocator(coreV1Api,
@@ -216,8 +217,8 @@ class PollingReloadSecretTest {
 		@Bean
 		@Primary
 		SecretsConfigProperties secretsConfigProperties() {
-			return new SecretsConfigProperties(true, Map.of(), List.of(), List.of(), true, SECRET_NAME, NAMESPACE,
-					false, true, FAIL_FAST, RetryProperties.DEFAULT);
+			return new SecretsConfigProperties(true, List.of(), Map.of(), SECRET_NAME, NAMESPACE, false, true,
+					FAIL_FAST, RetryProperties.DEFAULT, ReadType.BATCH);
 		}
 
 		@Bean

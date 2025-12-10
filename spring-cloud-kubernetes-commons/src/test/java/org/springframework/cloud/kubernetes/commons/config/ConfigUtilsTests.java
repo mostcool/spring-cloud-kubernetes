@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.springframework.cloud.kubernetes.commons.config;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -27,6 +26,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.mock.env.MockEnvironment;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author wind57
@@ -138,41 +139,13 @@ class ConfigUtilsTests {
 		Assertions.assertThat(ConfigUtils.includeProfileSpecificSources(true, false)).isFalse();
 	}
 
-	@Test
-	void testWithPrefix() {
-		PrefixContext context = new PrefixContext(Map.of("a", "b", "c", "d"), "prefix", "namespace",
-				Set.of("name1", "name2"));
-
-		SourceData result = ConfigUtils.withPrefix("configmap", context);
-
-		Assertions.assertThat(result.sourceName()).isEqualTo("configmap.name1.name2.namespace");
-
-		Assertions.assertThat(result.sourceData().get("prefix.a")).isEqualTo("b");
-		Assertions.assertThat(result.sourceData().get("prefix.c")).isEqualTo("d");
-	}
-
-	/*
-	 * source names should be reproducible all the time, this test asserts this.
-	 */
-	@Test
-	void testWithPrefixSortedName() {
-		PrefixContext context = new PrefixContext(Map.of("a", "b", "c", "d"), "prefix", "namespace",
-				Set.of("namec", "namea", "nameb"));
-
-		SourceData result = ConfigUtils.withPrefix("configmap", context);
-		Assertions.assertThat(result.sourceName()).isEqualTo("configmap.namea.nameb.namec.namespace");
-
-		Assertions.assertThat(result.sourceData().get("prefix.a")).isEqualTo("b");
-		Assertions.assertThat(result.sourceData().get("prefix.c")).isEqualTo("d");
-	}
-
 	/**
 	 * <pre>
 	 *
 	 *     - we have configmap-one with an application.yaml with two properties propA = A, prop = B
 	 *     - we have configmap-one-kubernetes with an application.yaml with two properties propA = AA, probC = C
 	 *
-	 *     As a result we should get three properties as output.
+	 *     As a result we should get two keys with 2 properties each.
 	 *
 	 * </pre>
 	 */
@@ -189,12 +162,17 @@ class ConfigUtilsTests {
 			.collect(Collectors.toCollection(LinkedHashSet::new));
 
 		MultipleSourcesContainer result = ConfigUtils.processNamedData(List.of(configMapOne, configMapOneK8s),
-				new MockEnvironment(), sourceNames, "default", false);
+				new MockEnvironment(), sourceNames, "default", false, true);
 
-		Assertions.assertThat(result.data().size()).isEqualTo(3);
-		Assertions.assertThat(result.data().get("propA")).isEqualTo("AA");
-		Assertions.assertThat(result.data().get("propB")).isEqualTo("B");
-		Assertions.assertThat(result.data().get("propC")).isEqualTo("C");
+		Assertions.assertThat(result.data().size()).isEqualTo(2);
+		Map<String, Object> one = result.data().get("configmap-one");
+		Assertions.assertThat(one.get("propA")).isEqualTo("A");
+		Assertions.assertThat(one.get("propB")).isEqualTo("B");
+
+		Map<String, Object> oneKubernetes = result.data().get("configmap-one-kubernetes");
+		Assertions.assertThat(oneKubernetes.get("propA")).isEqualTo("AA");
+		Assertions.assertThat(oneKubernetes.get("propC")).isEqualTo("C");
+
 	}
 
 	@Test
@@ -221,6 +199,30 @@ class ConfigUtilsTests {
 		Map<String, String> result = ConfigUtils.keysWithPrefix(Map.of("a", "b", "c", "d"), "prefix-");
 		Assertions.assertThat(result.isEmpty()).isFalse();
 		Assertions.assertThat(result).containsExactlyInAnyOrderEntriesOf(Map.of("prefix-a", "b", "prefix-c", "d"));
+	}
+
+	@Test
+	void testIssue1757() {
+
+		StrippedSourceContainer containerA = new StrippedSourceContainer(Map.of("load", "true"), "client-1",
+				Map.of("client-id", "clientA", "client-secret", "a"));
+
+		StrippedSourceContainer containerB = new StrippedSourceContainer(Map.of("load", "true"), "client-2",
+				Map.of("client-id", "clientB", "client-secret", "b"));
+
+		MultipleSourcesContainer container = ConfigUtils.processLabeledData(List.of(containerA, containerB),
+				new MockEnvironment(), Map.of("load", "true"), "default", false);
+
+		assertThat(container.data().keySet()).containsExactlyInAnyOrder("client-1", "client-2");
+
+		Map<String, Object> client1Data = container.data().get("client-1");
+		assertThat(client1Data)
+			.containsExactlyInAnyOrderEntriesOf(Map.of("client-id", "clientA", "client-secret", "a"));
+
+		Map<String, Object> client2Data = container.data().get("client-2");
+		assertThat(client2Data)
+			.containsExactlyInAnyOrderEntriesOf(Map.of("client-id", "clientB", "client-secret", "b"));
+
 	}
 
 }

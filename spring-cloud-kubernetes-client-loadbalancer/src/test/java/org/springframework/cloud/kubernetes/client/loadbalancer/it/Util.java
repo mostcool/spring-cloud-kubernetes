@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,19 +25,15 @@ import io.kubernetes.client.openapi.models.V1EndpointSubsetBuilder;
 import io.kubernetes.client.openapi.models.V1Endpoints;
 import io.kubernetes.client.openapi.models.V1EndpointsBuilder;
 import io.kubernetes.client.openapi.models.V1EndpointsList;
+import io.kubernetes.client.openapi.models.V1EndpointsListBuilder;
+import io.kubernetes.client.openapi.models.V1ListMetaBuilder;
 import io.kubernetes.client.openapi.models.V1ObjectMetaBuilder;
 import io.kubernetes.client.openapi.models.V1Service;
 import io.kubernetes.client.openapi.models.V1ServiceBuilder;
 import io.kubernetes.client.openapi.models.V1ServiceList;
+import io.kubernetes.client.openapi.models.V1ServiceListBuilder;
 import io.kubernetes.client.openapi.models.V1ServicePortBuilder;
 import io.kubernetes.client.openapi.models.V1ServiceSpecBuilder;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.cloud.client.loadbalancer.LoadBalanced;
-import org.springframework.context.annotation.Bean;
-import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * @author wind57
@@ -70,7 +66,7 @@ public final class Util {
 
 	public static void servicesPodMode(WireMockServer server, V1ServiceList serviceList) {
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/services*"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(serviceList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(serviceList)).withStatus(200)));
 	}
 
 	public static void servicesServiceMode(WireMockServer server, V1ServiceList serviceList, String serviceName) {
@@ -78,16 +74,16 @@ public final class Util {
 		// 'postConstruct' in the KubernetesInformerDiscoveryClient
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/services*"))
 			.withQueryParam("resourceVersion", WireMock.equalTo("0"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(serviceList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(serviceList)).withStatus(200)));
 
 		server
 			.stubFor(WireMock.get(WireMock.urlEqualTo("/api/v1/services?fieldSelector=metadata.name%3D" + serviceName))
-				.willReturn(WireMock.aResponse().withBody(new JSON().serialize(serviceList)).withStatus(200)));
+				.willReturn(WireMock.aResponse().withBody(JSON.serialize(serviceList)).withStatus(200)));
 	}
 
 	public static void endpointsPodMode(WireMockServer server, V1EndpointsList endpointsList) {
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/endpoints*"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(endpointsList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(endpointsList)).withStatus(200)));
 	}
 
 	public static void endpointsServiceMode(WireMockServer server, V1EndpointsList endpointsList,
@@ -96,16 +92,16 @@ public final class Util {
 		// 'postConstruct' in the KubernetesInformerDiscoveryClient
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/endpoints*"))
 			.withQueryParam("resourceVersion", WireMock.equalTo("0"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(endpointsList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(endpointsList)).withStatus(200)));
 
 		server.stubFor(
 				WireMock.get(WireMock.urlEqualTo("/api/v1/endpoints?fieldSelector=metadata.name%3D" + endpointsName))
-					.willReturn(WireMock.aResponse().withBody(new JSON().serialize(endpointsList)).withStatus(200)));
+					.willReturn(WireMock.aResponse().withBody(JSON.serialize(endpointsList)).withStatus(200)));
 	}
 
 	public static void servicesInNamespacePodMode(WireMockServer server, V1ServiceList serviceList, String namespace) {
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/namespaces/" + namespace + "/services*"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(serviceList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(serviceList)).withStatus(200)));
 	}
 
 	public static void servicesInNamespaceServiceMode(WireMockServer server, V1ServiceList serviceList,
@@ -114,18 +110,18 @@ public final class Util {
 		// 'postConstruct' in the KubernetesInformerDiscoveryClient
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/namespaces/" + namespace + "/services*"))
 			.withQueryParam("resourceVersion", WireMock.equalTo("0"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(serviceList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(serviceList)).withStatus(200)));
 
 		server.stubFor(WireMock
 			.get(WireMock.urlEqualTo(
 					"/api/v1/namespaces/" + namespace + "/services?fieldSelector=metadata.name%3D" + serviceName))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(serviceList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(serviceList)).withStatus(200)));
 	}
 
 	public static void endpointsInNamespacePodMode(WireMockServer server, V1EndpointsList endpointsList,
 			String namespace) {
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/namespaces/" + namespace + "/endpoints*"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(endpointsList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(endpointsList)).withStatus(200)));
 	}
 
 	public static void endpointsInNamespaceServiceMode(WireMockServer server, V1EndpointsList endpointsList,
@@ -134,32 +130,34 @@ public final class Util {
 		// 'postConstruct' in the KubernetesInformerDiscoveryClient
 		server.stubFor(WireMock.get(WireMock.urlPathMatching("^/api/v1/namespaces/" + namespace + "/endpoints*"))
 			.withQueryParam("resourceVersion", WireMock.equalTo("0"))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(endpointsList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(endpointsList)).withStatus(200)));
 
 		server.stubFor(WireMock
 			.get(WireMock.urlEqualTo(
 					"/api/v1/namespaces/" + namespace + "/endpoints?fieldSelector=metadata.name%3D" + endpointsName))
-			.willReturn(WireMock.aResponse().withBody(new JSON().serialize(endpointsList)).withStatus(200)));
+			.willReturn(WireMock.aResponse().withBody(JSON.serialize(endpointsList)).withStatus(200)));
 	}
 
-	@TestConfiguration
-	public static class LoadBalancerConfiguration {
+	public static void mockWatchers(WireMockServer wireMockServer) {
+		V1Service serviceA = Util.service("a", "service-a", 8888);
 
-		@Bean
-		@LoadBalanced
-		WebClient.Builder client() {
-			return WebClient.builder();
-		}
+		V1ServiceList serviceListA = new V1ServiceListBuilder()
+			.withNewMetadataLike(new V1ListMetaBuilder().withResourceVersion("0").build())
+			.endMetadata()
+			.withItems(serviceA)
+			.build();
 
-	}
+		servicesInNamespaceServiceMode(wireMockServer, serviceListA, "a", "service-a");
 
-	@SpringBootApplication
-	public static class Configuration {
+		V1Endpoints endpointsA = Util.endpoints("a", "service-a", 8888, "127.0.0.1");
 
-		public static void main(String[] args) {
-			SpringApplication.run(Configuration.class);
-		}
+		V1EndpointsList endpointsListA = new V1EndpointsListBuilder()
+			.withNewMetadataLike(new V1ListMetaBuilder().withResourceVersion("0").build())
+			.endMetadata()
+			.withItems(endpointsA)
+			.build();
 
+		Util.endpointsInNamespaceServiceMode(wireMockServer, endpointsListA, "a", "service-a");
 	}
 
 }

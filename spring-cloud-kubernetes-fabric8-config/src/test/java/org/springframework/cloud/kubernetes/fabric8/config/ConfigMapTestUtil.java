@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,6 @@
 package org.springframework.cloud.kubernetes.fabric8.config;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 
 import io.fabric8.kubernetes.client.utils.IOHelpers;
@@ -39,10 +36,6 @@ public final class ConfigMapTestUtil {
 			resource = "";
 		}
 		return resource;
-	}
-
-	public static void createFileWithContent(String file, String content) throws IOException {
-		Files.write(Paths.get(file), content.getBytes(), StandardOpenOption.CREATE);
 	}
 
 }

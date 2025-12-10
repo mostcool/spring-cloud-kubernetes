@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,24 +19,21 @@ package org.springframework.cloud.kubernetes.fabric8.config;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 
-import org.springframework.boot.ConfigurableBootstrapContext;
-import org.springframework.boot.context.config.ConfigDataLocation;
+import org.springframework.boot.bootstrap.ConfigurableBootstrapContext;
 import org.springframework.boot.context.config.ConfigDataLocationResolverContext;
-import org.springframework.boot.context.config.Profiles;
-import org.springframework.boot.logging.DeferredLogFactory;
 import org.springframework.cloud.kubernetes.commons.KubernetesClientProperties;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
 import org.springframework.cloud.kubernetes.commons.config.ConfigDataRetryableConfigMapPropertySourceLocator;
 import org.springframework.cloud.kubernetes.commons.config.ConfigDataRetryableSecretsPropertySourceLocator;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapConfigProperties;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapPropertySourceLocator;
-import org.springframework.cloud.kubernetes.commons.config.KubernetesConfigDataLocationResolver;
 import org.springframework.cloud.kubernetes.commons.config.SecretsConfigProperties;
 import org.springframework.cloud.kubernetes.commons.config.SecretsPropertySourceLocator;
+import org.springframework.cloud.kubernetes.commons.configdata.ConfigDataPropertiesHolder;
+import org.springframework.cloud.kubernetes.commons.configdata.KubernetesConfigDataLocationResolver;
 import org.springframework.cloud.kubernetes.fabric8.Fabric8AutoConfiguration;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.core.env.Environment;
 
 import static org.springframework.cloud.kubernetes.commons.config.ConfigUtils.registerSingle;
 
@@ -45,17 +42,13 @@ import static org.springframework.cloud.kubernetes.commons.config.ConfigUtils.re
  */
 public class Fabric8ConfigDataLocationResolver extends KubernetesConfigDataLocationResolver {
 
-	public Fabric8ConfigDataLocationResolver(DeferredLogFactory factory) {
-		super(factory);
-	}
-
 	@Override
-	protected void registerBeans(ConfigDataLocationResolverContext resolverContext, ConfigDataLocation location,
-			Profiles profiles, KubernetesConfigDataLocationResolver.PropertyHolder propertyHolder,
-			KubernetesNamespaceProvider namespaceProvider) {
-		KubernetesClientProperties kubernetesClientProperties = propertyHolder.kubernetesClientProperties();
-		ConfigMapConfigProperties configMapProperties = propertyHolder.configMapConfigProperties();
-		SecretsConfigProperties secretsProperties = propertyHolder.secretsProperties();
+	protected void registerBeans(ConfigDataLocationResolverContext resolverContext,
+			ConfigDataPropertiesHolder propertiesHolder, KubernetesNamespaceProvider namespaceProvider) {
+
+		KubernetesClientProperties kubernetesClientProperties = propertiesHolder.clientProperties();
+		ConfigMapConfigProperties configMapProperties = propertiesHolder.configMapProperties();
+		SecretsConfigProperties secretsProperties = propertiesHolder.secretsProperties();
 
 		ConfigurableBootstrapContext bootstrapContext = resolverContext.getBootstrapContext();
 		KubernetesClient kubernetesClient = registerConfigAndClient(bootstrapContext, kubernetesClientProperties);
@@ -65,7 +58,7 @@ public class Fabric8ConfigDataLocationResolver extends KubernetesConfigDataLocat
 					kubernetesClient, configMapProperties, namespaceProvider);
 			if (isRetryEnabledForConfigMap(configMapProperties)) {
 				configMapPropertySourceLocator = new ConfigDataRetryableConfigMapPropertySourceLocator(
-						configMapPropertySourceLocator, configMapProperties, new Fabric8ConfigMapsCache());
+						configMapPropertySourceLocator, configMapProperties);
 			}
 
 			registerSingle(bootstrapContext, ConfigMapPropertySourceLocator.class, configMapPropertySourceLocator,
@@ -77,7 +70,7 @@ public class Fabric8ConfigDataLocationResolver extends KubernetesConfigDataLocat
 					kubernetesClient, secretsProperties, namespaceProvider);
 			if (isRetryEnabledForSecrets(secretsProperties)) {
 				secretsPropertySourceLocator = new ConfigDataRetryableSecretsPropertySourceLocator(
-						secretsPropertySourceLocator, secretsProperties, new Fabric8SecretsCache());
+						secretsPropertySourceLocator, secretsProperties);
 			}
 
 			registerSingle(bootstrapContext, SecretsPropertySourceLocator.class, secretsPropertySourceLocator,
@@ -95,11 +88,6 @@ public class Fabric8ConfigDataLocationResolver extends KubernetesConfigDataLocat
 		registerSingle(bootstrapContext, KubernetesClient.class, kubernetesClient, "configKubernetesClient",
 				(ApplicationListener<ContextClosedEvent>) event -> kubernetesClient.close());
 		return kubernetesClient;
-	}
-
-	@Override
-	protected KubernetesNamespaceProvider kubernetesNamespaceProvider(Environment environment) {
-		return new KubernetesNamespaceProvider(environment);
 	}
 
 }

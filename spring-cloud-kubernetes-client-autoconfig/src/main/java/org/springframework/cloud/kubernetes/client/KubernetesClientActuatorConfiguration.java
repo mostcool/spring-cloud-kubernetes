@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2024 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package org.springframework.cloud.kubernetes.client;
 
 import io.kubernetes.client.openapi.models.V1Pod;
 
-import org.springframework.boot.actuate.autoconfigure.health.ConditionalOnEnabledHealthIndicator;
 import org.springframework.boot.actuate.autoconfigure.info.ConditionalOnEnabledInfoContributor;
+import org.springframework.boot.health.autoconfigure.contributor.ConditionalOnEnabledHealthIndicator;
 import org.springframework.cloud.kubernetes.commons.PodUtils;
 import org.springframework.cloud.kubernetes.commons.autoconfig.ConditionalOnKubernetesHealthIndicatorEnabled;
 import org.springframework.context.annotation.Bean;
@@ -30,17 +30,17 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnKubernetesHealthIndicatorEnabled
-public class KubernetesClientActuatorConfiguration {
+public final class KubernetesClientActuatorConfiguration {
 
 	@Bean
 	@ConditionalOnEnabledHealthIndicator("kubernetes")
-	public KubernetesClientHealthIndicator kubernetesHealthIndicator(PodUtils<V1Pod> podUtils) {
+	KubernetesClientHealthIndicator kubernetesHealthIndicator(PodUtils<V1Pod> podUtils) {
 		return new KubernetesClientHealthIndicator(podUtils);
 	}
 
 	@Bean
 	@ConditionalOnEnabledInfoContributor("kubernetes")
-	public KubernetesClientInfoContributor kubernetesInfoContributor(PodUtils<V1Pod> podUtils) {
+	KubernetesClientInfoContributor kubernetesInfoContributor(PodUtils<V1Pod> podUtils) {
 		return new KubernetesClientInfoContributor(podUtils);
 	}
 

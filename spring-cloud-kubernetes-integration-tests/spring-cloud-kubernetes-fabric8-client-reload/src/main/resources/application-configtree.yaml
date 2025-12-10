@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: poll-reload
+  config:
+    import: "kubernetes:,configtree:/tmp/"
+
+management:
+  endpoint:
+    refresh:
+      access: unrestricted
+    restart:
+      access: unrestricted
+  endpoints:
+    web:
+      exposure:
+        include: '*'

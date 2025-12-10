@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +67,8 @@ public class KubernetesClientEventBasedConfigMapChangeDetector extends Configura
 
 	private final Set<String> namespaces;
 
+	private final ConfigurableEnvironment environment;
+
 	private final boolean enableReloadFiltering;
 
 	private final ResourceEventHandler<V1ConfigMap> handler = new ResourceEventHandler<>() {
@@ -102,7 +104,8 @@ public class KubernetesClientEventBasedConfigMapChangeDetector extends Configura
 			ConfigReloadProperties properties, ConfigurationUpdateStrategy strategy,
 			KubernetesClientConfigMapPropertySourceLocator propertySourceLocator,
 			KubernetesNamespaceProvider kubernetesNamespaceProvider) {
-		super(environment, properties, strategy);
+		super(strategy);
+		this.environment = environment;
 		this.propertySourceLocator = propertySourceLocator;
 		this.coreV1Api = coreV1Api;
 		this.apiClient = createApiClientForInformerClient();
@@ -124,9 +127,11 @@ public class KubernetesClientEventBasedConfigMapChangeDetector extends Configura
 			SharedInformerFactory factory = new SharedInformerFactory(apiClient);
 			factories.add(factory);
 			informer = factory
-				.sharedIndexInformerFor((CallGeneratorParams params) -> coreV1Api.listNamespacedConfigMapCall(namespace,
-						null, null, null, null, filter[0], null, params.resourceVersion, null, null,
-						params.timeoutSeconds, params.watch, null), V1ConfigMap.class, V1ConfigMapList.class);
+				.sharedIndexInformerFor((CallGeneratorParams params) -> coreV1Api.listNamespacedConfigMap(namespace)
+					.timeoutSeconds(params.timeoutSeconds)
+					.resourceVersion(params.resourceVersion)
+					.watch(params.watch)
+					.buildCall(null), V1ConfigMap.class, V1ConfigMapList.class);
 
 			LOG.debug(() -> "added configmap informer for namespace : " + namespace + " with filter : " + filter[0]);
 

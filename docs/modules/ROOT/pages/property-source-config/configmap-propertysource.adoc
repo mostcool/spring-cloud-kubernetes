@@ -1,7 +1,7 @@
 [[configmap-propertysource]]
 = Using a `ConfigMap` `PropertySource`
 
-Kubernetes provides a resource named https://kubernetes.io/docs/user-guide/configmap/[`ConfigMap`] to externalize the
+Kubernetes provides a resource named https://kubernetes.io/docs/concepts/configuration/configmap/[`ConfigMap`] to externalize the
 parameters to pass to your application in the form of key-value pairs or embedded `application.properties` or `application.yaml` files.
 The link:https://github.com/spring-cloud/spring-cloud-kubernetes/tree/main/spring-cloud-kubernetes-fabric8-config[Spring Cloud Kubernetes Config] project makes Kubernetes `ConfigMap` instances available
 during application startup and triggers hot reloading of beans or Spring context when changes are detected on
@@ -57,7 +57,7 @@ An example should make a lot more sense. Let's suppose that `spring.application.
 we have a single active profile called `k8s`. For a configuration as below:
 
 
-[source]
+[source,yaml]
 ----
 kind: ConfigMap
 apiVersion: v1
@@ -92,7 +92,7 @@ The order of loading properties is a as follows:
 This means that profile based sources take precedence over non-profile based sources (just like in a vanilla Spring app); and plain properties take precedence over both profile and non-profile based sources. Here is an example:
 
 ====
-[source]
+[source,yaml]
 ----
 kind: ConfigMap
 apiVersion: v1
@@ -101,7 +101,7 @@ metadata:
 data:
   my-app-k8s.yaml: |-
     key1=valueA
-	key2=valueB
+    key2=valueB
   my-app.yaml: |-
     key1=valueC
     key2=valueA
@@ -184,7 +184,7 @@ spring:
   cloud:
     kubernetes:
       config:
-        enableApi: true
+        enabled: true
         useNameAsPrefix: true
         namespace: spring-k8s
         sources:
@@ -318,13 +318,13 @@ spec:
     metadata:
       labels:
         app: deployment-name
-	spec:
-		containers:
-		- name: container-name
-		  image: your-image
-		  env:
-		  - name: SPRING_PROFILES_ACTIVE
-			value: "development"
+    spec:
+      containers:
+        - name: container-name
+          image: your-image
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "development"
 ----
 
 You could run into a situation where there are multiple configs maps that have the same property names. For example:
@@ -447,7 +447,7 @@ will result in three properties being generated:
 The same way you configure a prefix for configmaps, you can do it for secrets also; both for secrets that are based on name
 and the ones based on labels. For example:
 
-[source.yaml]
+[source,yaml]
 ----
 spring:
   application:
@@ -455,7 +455,7 @@ spring:
   cloud:
     kubernetes:
       secrets:
-        enableApi: true
+        enabled: true
         useNameAsPrefix: true
         namespace: spring-k8s
         sources:
@@ -475,11 +475,11 @@ spring:
 
 The same processing rules apply when generating property source as for config maps. The only difference is that
 potentially, looking up secrets by labels can mean that we find more than one source. In such a case, prefix (if specified via `useNameAsPrefix`)
-will be the names of all secrets found for those particular labels.
+will be the name of the secret found for those particular labels.
 
-One more thing to bear in mind is that we support `prefix` per _source_, not per secret. The easiest way to explain this is via an example:
+One more thing to bear in mind is that we support `prefix` per _secret_. The easiest way to explain this is via an example:
 
-[source.yaml]
+[source,yaml]
 ----
 spring:
   application:
@@ -487,7 +487,7 @@ spring:
   cloud:
     kubernetes:
       secrets:
-        enableApi: true
+        enabled: true
         useNameAsPrefix: true
         namespace: spring-k8s
         sources:
@@ -496,14 +496,11 @@ spring:
             useNameAsPrefix: true
 ----
 
-Suppose that a query matching such a label will provide two secrets as a result: `secret-a` and `secret-b`.
-Both of these secrets have the same property name: `color=sea-blue` and `color=ocean-blue`. It is undefined which
-`color` will end-up as part of property sources, but the prefix for it will be `secret-a.secret-b`
-(concatenated sorted naturally, names of the secrets).
+Suppose that a query matching such a label will return two secrets as a result: `secretA` and `secretB`.
+Both of these secrets have the same property name: `color=sea-blue` and `color=ocean-blue`. Because `useNamesAsPrefix=true`, there will be two property sources loaded:
 
-If you need more fine-grained results, adding more labels to identify the secret uniquely would be an option.
-
-
+ - `secretA.color=sea-blue`
+ - `secretB.color=ocean-blue`
 
 By default, besides reading the config map that is specified in the `sources` configuration, Spring will also try to read
 all properties from "profile aware" sources. The easiest way to explain this is via an example. Let's suppose your application
@@ -523,9 +520,10 @@ spring:
 ----
 
 Besides reading the `config-map-one`, Spring will also try to read `config-map-one-dev`; in this particular order. Each active profile
-generates such a profile aware config map.
+generates such a profile aware configmap.
 
-Though your application should not be impacted by such a config map, it can be disabled if needed:
+You can disable this "profile based sources" and then `config-map-one-dev` will
+not be attempted:
 
 [source,yaml]
 ----
@@ -542,33 +540,14 @@ spring:
             includeProfileSpecificSources: false
 ----
 
+NOTE: Since version `5.0.0`, `includeProfileSpecificSources` is only supported for named sources (`spring.cloud.kubernetes.sources.name=XXX`); support for labeled sources has been removed.
+
+
 Notice that just like before, there are two levels where you can specify this property: for all config maps or
 for individual ones; the latter having a higher priority.
 
 NOTE: You should check the security configuration section. To access config maps from inside a pod you need to have the correct
 Kubernetes service accounts, roles and role bindings.
-
-Another option for using `ConfigMap` instances is to mount them into the Pod by running the Spring Cloud Kubernetes application
-and having Spring Cloud Kubernetes read them from the file system.
-
-NOTE: This feature is deprecated and will be removed in a future release (Use `spring.config.import` instead).
-This behavior is controlled by the `spring.cloud.kubernetes.config.paths` property. You can use it in
-addition to or instead of the mechanism described earlier.
-`spring.cloud.kubernetes.config.paths` expects a List of full paths to each property file, because directories are not being recursively parsed. For example:
-
-```
-spring:
-  cloud:
-    kubernetes:
-      config:
-        paths:
-          - /tmp/application.properties
-          - /var/application.yaml
-```
-
-NOTE:  If you use `spring.cloud.kubernetes.config.paths` or `spring.cloud.kubernetes.secrets.path` the automatic reload
-functionality will not work.  You will need to make a `POST` request to the `/actuator/refresh` endpoint or
-restart/redeploy the application.
 
 [#config-map-fail-fast]
 In some cases, your application may be unable to load some of your `ConfigMaps` using the Kubernetes API.
@@ -577,14 +556,17 @@ If you want your application to fail the start-up process in such cases, you can
 
 [#config-map-retry]
 You can also make your application retry loading `ConfigMap` property sources on a failure. First, you need to
-set `spring.cloud.kubernetes.config.fail-fast=true`. Then you need to add `spring-retry` 
-and `spring-boot-starter-aop` to your classpath. You can configure retry properties such as
+set `spring.cloud.kubernetes.config.fail-fast=true`. Then you need to add `spring-retry`
+and `spring-boot-starter-aspectj` to your classpath. You can configure retry properties such as
 the maximum number of attempts, backoff options like initial interval, multiplier, max interval by setting the
 `spring.cloud.kubernetes.config.retry.*` properties.
 
-NOTE: If you already have `spring-retry` and `spring-boot-starter-aop` on the classpath for some reason
+NOTE: If you already have `spring-retry` and `spring-boot-starter-aspectj` on the classpath for some reason
 and want to enable fail-fast, but do not want retry to be enabled; you can disable retry for `ConfigMap` `PropertySources`
 by setting `spring.cloud.kubernetes.config.retry.enabled=false`.
+
+
+NOTE: Since version `5.0.0`, we have introduced the possibility to read sources individually. Until now, we would go to the namespace and read all the configmaps / secrets available and then filter out the ones requested. Since `5.0.0-M3` you can specify that you want to read them individually, by setting the property: `spring.cloud.kubernetes.config.read-type=SINGLE`. The previous option to read them all in a namespace is controlled by `spring.cloud.kubernetes.config.read-type=BATCH` and it is the default option.
 
 .Properties:
 [options="header,footer"]
@@ -593,8 +575,6 @@ by setting `spring.cloud.kubernetes.config.retry.enabled=false`.
 | `spring.cloud.kubernetes.config.enabled`                | `Boolean` | `true`                       | Enable ConfigMaps `PropertySource`
 | `spring.cloud.kubernetes.config.name`                   | `String`  | `${spring.application.name}` | Sets the name of `ConfigMap` to look up
 | `spring.cloud.kubernetes.config.namespace`              | `String`  | Client namespace             | Sets the Kubernetes namespace where to lookup
-| `spring.cloud.kubernetes.config.paths`                  | `List`    | `null`                       | Sets the paths where `ConfigMap` instances are mounted
-| `spring.cloud.kubernetes.config.enableApi`              | `Boolean` | `true`                       | Enable or disable consuming `ConfigMap` instances through APIs
 | `spring.cloud.kubernetes.config.fail-fast`              | `Boolean` | `false`                      | Enable or disable failing the application start-up when an error occurred while loading a `ConfigMap`
 | `spring.cloud.kubernetes.config.retry.enabled`          | `Boolean` | `true`                       | Enable or disable config retry.
 | `spring.cloud.kubernetes.config.retry.initial-interval` | `Long`    | `1000`                       | Initial retry interval in milliseconds.
@@ -602,4 +582,3 @@ by setting `spring.cloud.kubernetes.config.retry.enabled=false`.
 | `spring.cloud.kubernetes.config.retry.max-interval`     | `Long`    | `2000`                       | Maximum interval for backoff.
 | `spring.cloud.kubernetes.config.retry.multiplier`       | `Double`  | `1.1`                        | Multiplier for next interval.
 |===
-

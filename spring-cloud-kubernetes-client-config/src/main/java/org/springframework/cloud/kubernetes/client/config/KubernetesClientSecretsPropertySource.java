@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,6 @@ import org.springframework.cloud.kubernetes.commons.config.SourceData;
  * @author Isik Erhan
  */
 public class KubernetesClientSecretsPropertySource extends SecretsPropertySource {
-
-	@Deprecated(forRemoval = true)
-	public KubernetesClientSecretsPropertySource(SourceData sourceData) {
-		super(sourceData);
-	}
 
 	private static final EnumMap<NormalizedSourceType, KubernetesClientContextToSourceData> STRATEGIES = new EnumMap<>(
 			NormalizedSourceType.class);

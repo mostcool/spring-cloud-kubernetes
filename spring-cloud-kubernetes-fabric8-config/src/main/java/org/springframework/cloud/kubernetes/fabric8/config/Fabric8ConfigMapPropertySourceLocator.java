@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,15 @@ import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapConfigProperties;
 import org.springframework.cloud.kubernetes.commons.config.ConfigMapPropertySourceLocator;
 import org.springframework.cloud.kubernetes.commons.config.NormalizedSource;
+import org.springframework.cloud.kubernetes.commons.config.ReadType;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Environment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.PropertySource;
 
 import static org.springframework.cloud.kubernetes.fabric8.Fabric8Utils.getApplicationNamespace;
+import static org.springframework.cloud.kubernetes.fabric8.config.Fabric8SourcesBatchRead.discardConfigMaps;
 
 /**
  * A {@link PropertySourceLocator} that uses config maps.
@@ -45,19 +49,27 @@ public class Fabric8ConfigMapPropertySourceLocator extends ConfigMapPropertySour
 
 	Fabric8ConfigMapPropertySourceLocator(KubernetesClient client, ConfigMapConfigProperties properties,
 			KubernetesNamespaceProvider provider) {
-		super(properties, new Fabric8ConfigMapsCache());
+		super(properties);
 		this.client = client;
 		this.provider = provider;
 	}
 
 	@Override
-	protected MapPropertySource getMapPropertySource(NormalizedSource normalizedSource,
-			ConfigurableEnvironment environment) {
+	public PropertySource<?> locate(Environment environment) {
+		PropertySource<?> configMapSources = super.locate(environment);
+		discardConfigMaps();
+		return configMapSources;
+	}
+
+	@Override
+	protected MapPropertySource getPropertySource(ConfigurableEnvironment environment,
+			NormalizedSource normalizedSource, ReadType readType) {
 		// NormalizedSource has a namespace, but users can skip it.
 		// In such cases we try to get it elsewhere
 		String namespace = getApplicationNamespace(this.client, normalizedSource.namespace().orElse(null),
 				normalizedSource.target(), provider);
-		Fabric8ConfigContext context = new Fabric8ConfigContext(client, normalizedSource, namespace, environment);
+		Fabric8ConfigContext context = new Fabric8ConfigContext(client, normalizedSource, namespace, environment,
+				readType);
 		return new Fabric8ConfigMapPropertySource(context);
 	}
 

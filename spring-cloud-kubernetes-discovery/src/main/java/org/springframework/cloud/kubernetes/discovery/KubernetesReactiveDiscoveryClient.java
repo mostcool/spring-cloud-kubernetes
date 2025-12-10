@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,59 +16,21 @@
 
 package org.springframework.cloud.kubernetes.discovery;
 
-import reactor.core.publisher.Flux;
-
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cloud.client.ServiceInstance;
-import org.springframework.cloud.client.discovery.ReactiveDiscoveryClient;
-import org.springframework.cloud.kubernetes.commons.discovery.DefaultKubernetesServiceInstance;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
-import org.springframework.cloud.kubernetes.commons.discovery.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * @author Ryan Baxter
  */
-public class KubernetesReactiveDiscoveryClient implements ReactiveDiscoveryClient {
-
-	private final WebClient webClient;
-
-	@Deprecated(forRemoval = true)
-	public KubernetesReactiveDiscoveryClient(WebClient.Builder webClientBuilder,
-			KubernetesDiscoveryClientProperties properties) {
-		if (!StringUtils.hasText(properties.getDiscoveryServerUrl())) {
-			throw new DiscoveryServerUrlInvalidException();
-		}
-		webClient = webClientBuilder.baseUrl(properties.getDiscoveryServerUrl()).build();
-	}
+final class KubernetesReactiveDiscoveryClient extends KubernetesAbstractReactiveDiscoveryClient {
 
 	KubernetesReactiveDiscoveryClient(WebClient.Builder webClientBuilder, KubernetesDiscoveryProperties properties) {
-		if (!StringUtils.hasText(properties.discoveryServerUrl())) {
-			throw new DiscoveryServerUrlInvalidException();
-		}
-		webClient = webClientBuilder.baseUrl(properties.discoveryServerUrl()).build();
+		super(webClientBuilder, properties);
 	}
 
 	@Override
 	public String description() {
 		return "Reactive Kubernetes Discovery Client";
-	}
-
-	@Override
-	@Cacheable("serviceinstances")
-	public Flux<ServiceInstance> getInstances(String serviceId) {
-		return webClient.get()
-			.uri("/apps/" + serviceId)
-			.exchangeToFlux(clientResponse -> clientResponse.bodyToFlux(DefaultKubernetesServiceInstance.class));
-	}
-
-	@Override
-	@Cacheable("services")
-	public Flux<String> getServices() {
-		return webClient.get()
-			.uri("/apps")
-			.exchangeToFlux(clientResponse -> clientResponse.bodyToFlux(Service.class).map(Service::name));
 	}
 
 }

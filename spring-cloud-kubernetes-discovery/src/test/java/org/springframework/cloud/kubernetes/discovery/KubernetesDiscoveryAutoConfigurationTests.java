@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@ package org.springframework.cloud.kubernetes.discovery;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -266,6 +266,112 @@ class KubernetesDiscoveryAutoConfigurationTests {
 		});
 	}
 
+	/**
+	 * <pre>
+	 *     - no property related to cacheable in the blocking implementation is set, as such:
+	 *     - KubernetesDiscoveryClient is present
+	 *     - KubernetesCacheableDiscoveryClient is not present
+	 * </pre>
+	 */
+	@Test
+	void blockingCacheableDefault() {
+		setupWithFilteredClassLoader(null, "spring.main.cloud-platform=KUBERNETES", "spring.cloud.config.enabled=false",
+				"spring.cloud.kubernetes.discovery.discovery-server-url=http://k8sdiscoveryserver");
+		applicationContextRunner.run(context -> {
+			assertThat(context).hasSingleBean(KubernetesDiscoveryClient.class);
+			assertThat(context).doesNotHaveBean(KubernetesCacheableDiscoveryClient.class);
+		});
+	}
+
+	/**
+	 * <pre>
+	 *     - cacheable in the blocking implementation = false, as such:
+	 *     - KubernetesDiscoveryClient is present
+	 *     - KubernetesCacheableDiscoveryClient is not present
+	 * </pre>
+	 */
+	@Test
+	void blockingCacheableDisabled() {
+		setupWithFilteredClassLoader(null, "spring.main.cloud-platform=KUBERNETES", "spring.cloud.config.enabled=false",
+				"spring.cloud.kubernetes.discovery.cacheable.blocking.enabled=false",
+				"spring.cloud.kubernetes.discovery.discovery-server-url=http://k8sdiscoveryserver");
+		applicationContextRunner.run(context -> {
+			assertThat(context).hasSingleBean(KubernetesDiscoveryClient.class);
+			assertThat(context).doesNotHaveBean(KubernetesCacheableDiscoveryClient.class);
+		});
+	}
+
+	/**
+	 * <pre>
+	 *     - cacheable in the blocking implementation = true, as such:
+	 *     - KubernetesDiscoveryClient is not present
+	 *     - KubernetesCacheableDiscoveryClient is present
+	 * </pre>
+	 */
+	@Test
+	void blockingCacheableEnabled() {
+		setupWithFilteredClassLoader(null, "spring.main.cloud-platform=KUBERNETES", "spring.cloud.config.enabled=false",
+				"spring.cloud.kubernetes.discovery.cacheable.blocking.enabled=true",
+				"spring.cloud.kubernetes.discovery.discovery-server-url=http://k8sdiscoveryserver");
+		applicationContextRunner.run(context -> {
+			assertThat(context).doesNotHaveBean(KubernetesDiscoveryClient.class);
+			assertThat(context).hasSingleBean(KubernetesCacheableDiscoveryClient.class);
+		});
+	}
+
+	/**
+	 * <pre>
+	 *     - no property related to cacheable in the reactive implementation is set, as such:
+	 *     - KubernetesReactiveDiscoveryClient is present
+	 *     - KubernetesCacheableReactiveDiscoveryClient is not present
+	 * </pre>
+	 */
+	@Test
+	void reactiveCacheableDefault() {
+		setupWithFilteredClassLoader(null, "spring.main.cloud-platform=KUBERNETES", "spring.cloud.config.enabled=false",
+				"spring.cloud.kubernetes.discovery.discovery-server-url=http://k8sdiscoveryserver");
+		applicationContextRunner.run(context -> {
+			assertThat(context).hasSingleBean(KubernetesReactiveDiscoveryClient.class);
+			assertThat(context).doesNotHaveBean(KubernetesCacheableReactiveDiscoveryClient.class);
+		});
+	}
+
+	/**
+	 * <pre>
+	 *     - cacheable in the reactive implementation = false, as such:
+	 *     - KubernetesReactiveDiscoveryClient is present
+	 *     - KubernetesCacheableReactiveDiscoveryClient is not present
+	 * </pre>
+	 */
+	@Test
+	void reactiveCacheableDisabled() {
+		setupWithFilteredClassLoader(null, "spring.main.cloud-platform=KUBERNETES", "spring.cloud.config.enabled=false",
+				"spring.cloud.kubernetes.discovery.cacheable.reactive.enabled=false",
+				"spring.cloud.kubernetes.discovery.discovery-server-url=http://k8sdiscoveryserver");
+		applicationContextRunner.run(context -> {
+			assertThat(context).hasSingleBean(KubernetesReactiveDiscoveryClient.class);
+			assertThat(context).doesNotHaveBean(KubernetesCacheableReactiveDiscoveryClient.class);
+		});
+	}
+
+	/**
+	 * <pre>
+	 *     - cacheable in the reactive implementation = true, as such:
+	 *     - KubernetesReactiveDiscoveryClient is not present
+	 *     - KubernetesCacheableReactiveDiscoveryClient is present
+	 * </pre>
+	 */
+	@Test
+	void reactiveCacheableEnabled() {
+		setupWithFilteredClassLoader(null, "spring.main.cloud-platform=KUBERNETES", "spring.cloud.config.enabled=false",
+				"spring.cloud.kubernetes.discovery.cacheable.reactive.enabled=true",
+				"spring.cloud.kubernetes.discovery.discovery-server-url=http://k8sdiscoveryserver");
+		applicationContextRunner.run(context -> {
+			assertThat(context).doesNotHaveBean(KubernetesReactiveDiscoveryClient.class);
+			assertThat(context).hasSingleBean(KubernetesCacheableReactiveDiscoveryClient.class);
+		});
+	}
+
 	private ApplicationContextRunner applicationContextRunner;
 
 	private void setupWithFilteredClassLoader(Class<?> cls, String... properties) {
@@ -273,14 +379,16 @@ class KubernetesDiscoveryAutoConfigurationTests {
 		if (cls != null) {
 			applicationContextRunner = new ApplicationContextRunner()
 				.withConfiguration(AutoConfigurations.of(KubernetesDiscoveryClientBlockingAutoConfiguration.class,
-						KubernetesDiscoveryClientReactiveAutoConfiguration.class))
+						KubernetesDiscoveryClientReactiveAutoConfiguration.class,
+						KubernetesDiscoveryClientHealthAutoConfiguration.class))
 				.withClassLoader(new FilteredClassLoader(cls))
 				.withPropertyValues(properties);
 		}
 		else {
 			applicationContextRunner = new ApplicationContextRunner()
 				.withConfiguration(AutoConfigurations.of(KubernetesDiscoveryClientBlockingAutoConfiguration.class,
-						KubernetesDiscoveryClientReactiveAutoConfiguration.class))
+						KubernetesDiscoveryClientReactiveAutoConfiguration.class,
+						KubernetesDiscoveryClientHealthAutoConfiguration.class))
 				.withPropertyValues(properties);
 		}
 

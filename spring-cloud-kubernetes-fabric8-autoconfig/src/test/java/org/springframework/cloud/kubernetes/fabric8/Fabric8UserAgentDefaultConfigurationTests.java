@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,13 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.kubernetes.example.App;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author wind57
  */
-@SpringBootTest(classes = App.class, properties = "spring.main.cloud-platform=KUBERNETES")
+@SpringBootTest(classes = TestApp.class, properties = "spring.main.cloud-platform=KUBERNETES")
 class Fabric8UserAgentDefaultConfigurationTests {
 
 	@Autowired
@@ -37,7 +36,7 @@ class Fabric8UserAgentDefaultConfigurationTests {
 	@Test
 	void testUserAgent() {
 		String userAgent = client.getConfiguration().getUserAgent();
-		assertThat(userAgent).isEqualTo("fabric8-kubernetes-client/6.13.5");
+		assertThat(userAgent).isEqualTo("fabric8-kubernetes-client/7.4.0");
 	}
 
 }

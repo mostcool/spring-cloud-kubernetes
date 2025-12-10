@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.kubernetes.example.App;
 import org.springframework.test.annotation.DirtiesContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * test "User-Agent" functionality via system properties
  */
-@SpringBootTest(classes = App.class, properties = "spring.main.cloud-platform=KUBERNETES")
+@SpringBootTest(classes = TestApp.class, properties = "spring.main.cloud-platform=KUBERNETES")
 @DirtiesContext
 class Fabric8ClientUserAgentEnvPropertyTests {
 

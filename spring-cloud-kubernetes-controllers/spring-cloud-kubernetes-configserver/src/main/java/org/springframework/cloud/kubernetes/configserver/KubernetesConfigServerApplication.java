@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package org.springframework.cloud.kubernetes.configserver;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.cloud.config.server.ConfigServerApplication;
 import org.springframework.cloud.config.server.EnableConfigServer;
 
 /**
@@ -29,7 +28,9 @@ import org.springframework.cloud.config.server.EnableConfigServer;
 public class KubernetesConfigServerApplication {
 
 	public static void main(String[] args) {
-		new SpringApplicationBuilder(ConfigServerApplication.class).run(args);
+		new SpringApplicationBuilder(KubernetesConfigServerApplication.class)
+			.properties("spring.config.name=configserver")
+			.run(args);
 	}
 
 }

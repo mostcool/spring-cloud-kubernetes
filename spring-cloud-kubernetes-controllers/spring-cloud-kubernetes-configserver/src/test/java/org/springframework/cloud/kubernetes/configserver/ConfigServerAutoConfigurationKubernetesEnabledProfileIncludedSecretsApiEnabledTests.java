@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 		classes = { KubernetesConfigServerApplication.class },
 		properties = { "spring.profiles.include=kubernetes", "spring.main.cloud-platform=KUBERNETES",
-				"spring.cloud.kubernetes.client.namespace=default", "spring.cloud.kubernetes.secrets.enableApi=true" })
+				"spring.cloud.kubernetes.client.namespace=default", "spring.cloud.kubernetes.secrets.enabled=true" })
 class ConfigServerAutoConfigurationKubernetesEnabledProfileIncludedSecretsApiEnabledTests {
 
 	@Autowired

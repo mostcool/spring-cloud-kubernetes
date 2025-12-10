@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@
 package org.springframework.cloud.kubernetes.client.config;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Supplier;
 
 import org.springframework.cloud.kubernetes.commons.config.LabeledConfigMapNormalizedSource;
 import org.springframework.cloud.kubernetes.commons.config.LabeledSourceData;
 import org.springframework.cloud.kubernetes.commons.config.MultipleSourcesContainer;
+
+import static org.springframework.cloud.kubernetes.client.config.KubernetesClientConfigUtils.configMapsByLabels;
 
 class LabeledConfigMapContextToSourceDataProvider implements Supplier<KubernetesClientContextToSourceData> {
 
@@ -34,11 +35,10 @@ class LabeledConfigMapContextToSourceDataProvider implements Supplier<Kubernetes
 	 * There could be many sources that are read based on incoming labels, for which we
 	 * will be computing a single Map<String, Object> in the end.
 	 *
-	 * If there is no config maps found for the provided labels, we will return an "empty"
-	 * SourceData. Its name is going to be the concatenated labels mapped to an empty Map.
+	 * If there are no config maps found for the provided labels, we will return an
+	 * "empty" SourceData. Its name is going to be the concatenated labels mapped to an
+	 * empty Map.
 	 *
-	 * If we find config maps(s) for the provided labels, its name is going to be the
-	 * concatenated names mapped to the data they hold as a Map.
 	 */
 	@Override
 	public KubernetesClientContextToSourceData get() {
@@ -49,13 +49,12 @@ class LabeledConfigMapContextToSourceDataProvider implements Supplier<Kubernetes
 
 			return new LabeledSourceData() {
 				@Override
-				public MultipleSourcesContainer dataSupplier(Map<String, String> labels, Set<String> profiles) {
-					return KubernetesClientConfigUtils.configMapsDataByLabels(context.client(), context.namespace(),
-							labels, context.environment(), profiles);
+				public MultipleSourcesContainer dataSupplier(Map<String, String> labels) {
+					return configMapsByLabels(context.client(), context.namespace(), labels, context.environment(),
+							context.readType());
 				}
 
-			}.compute(source.labels(), source.prefix(), source.target(), source.profileSpecificSources(),
-					source.failFast(), context.namespace(), context.environment().getActiveProfiles());
+			}.compute(source.labels(), source.prefix(), source.target(), source.failFast(), context.namespace());
 		};
 
 	}

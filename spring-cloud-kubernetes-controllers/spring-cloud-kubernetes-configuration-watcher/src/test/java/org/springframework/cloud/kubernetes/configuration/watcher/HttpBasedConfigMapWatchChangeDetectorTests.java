@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ import reactor.test.StepVerifier;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.kubernetes.client.KubernetesClientUtils;
 import org.springframework.cloud.kubernetes.client.config.KubernetesClientConfigMapPropertySourceLocator;
-import org.springframework.cloud.kubernetes.client.discovery.reactive.KubernetesInformerReactiveDiscoveryClient;
+import org.springframework.cloud.kubernetes.client.discovery.KubernetesClientInformerReactiveDiscoveryClient;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
 import org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadProperties;
 import org.springframework.cloud.kubernetes.commons.config.reload.ConfigurationUpdateStrategy;
@@ -83,7 +83,7 @@ class HttpBasedConfigMapWatchChangeDetectorTests {
 	private ThreadPoolTaskExecutor threadPoolTaskExecutor;
 
 	@Mock
-	private KubernetesInformerReactiveDiscoveryClient reactiveDiscoveryClient;
+	private KubernetesClientInformerReactiveDiscoveryClient reactiveDiscoveryClient;
 
 	private MockEnvironment mockEnvironment;
 
@@ -225,7 +225,7 @@ class HttpBasedConfigMapWatchChangeDetectorTests {
 		fooEndpointPort.setPort(port);
 		List<ServiceInstance> instances = new ArrayList<>();
 		DefaultKubernetesServiceInstance fooServiceInstance = new DefaultKubernetesServiceInstance("foo", "foo",
-				fooEndpointAddress.getIp(), fooEndpointPort.getPort(), metadata, false);
+				fooEndpointAddress.getIp(), fooEndpointPort.getPort(), metadata, false, null, null, Map.of());
 		instances.add(fooServiceInstance);
 		return instances;
 	}
@@ -240,7 +240,7 @@ class HttpBasedConfigMapWatchChangeDetectorTests {
 
 		List<ServiceInstance> instances = new ArrayList<>();
 		DefaultKubernetesServiceInstance fooServiceInstance = new DefaultKubernetesServiceInstance("foo", "foo",
-				fooEndpointAddress.getIp(), fooEndpointPort.getPort(), new HashMap<>(), false);
+				fooEndpointAddress.getIp(), fooEndpointPort.getPort(), new HashMap<>(), false, null, null, Map.of());
 		instances.add(fooServiceInstance);
 		when(reactiveDiscoveryClient.getInstances(eq("foo"))).thenReturn(Flux.fromIterable(instances));
 	}

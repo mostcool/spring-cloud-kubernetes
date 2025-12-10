@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,6 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.cloud.bootstrap.config.BootstrapPropertySource;
-import org.springframework.cloud.kubernetes.commons.config.MountConfigMapPropertySource;
-import org.springframework.cloud.kubernetes.commons.config.SecretsPropertySource;
-import org.springframework.cloud.kubernetes.commons.config.SourceData;
 import org.springframework.core.env.CompositePropertySource;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
@@ -141,41 +138,14 @@ class ConfigReloadUtilTests {
 				return null;
 			}
 		}));
-		propertySources.addFirst(new MountConfigMapPropertySource("mounted", Map.of("a", "b")));
 
 		List<? extends PropertySource> result = ConfigReloadUtil.findPropertySources(PlainPropertySource.class,
 				environment);
 
-		Assertions.assertThat(result.size()).isEqualTo(3);
-		Assertions.assertThat(result.get(0).getProperty("a")).isEqualTo("b");
-		Assertions.assertThat(result.get(1).getProperty("")).isEqualTo("plain");
-		Assertions.assertThat(result.get(2).getProperty("")).isEqualTo("from-inner-two-composite");
+		Assertions.assertThat(result.size()).isEqualTo(2);
+		Assertions.assertThat(result.get(0).getProperty("a")).isEqualTo("plain");
+		Assertions.assertThat(result.get(1).getProperty("")).isEqualTo("from-inner-two-composite");
 
-	}
-
-	@Test
-	void testSecretsPropertySource() {
-		MockEnvironment environment = new MockEnvironment();
-		MutablePropertySources propertySources = environment.getPropertySources();
-		propertySources.addFirst(new SecretsPropertySource(new SourceData("secret", Map.of("a", "b"))));
-
-		List<? extends PropertySource> result = ConfigReloadUtil.findPropertySources(PlainPropertySource.class,
-				environment);
-		assertThat(result.size()).isEqualTo(1);
-		assertThat(result.get(0).getProperty("a")).isEqualTo("b");
-	}
-
-	@Test
-	void testBootstrapSecretsPropertySource() {
-		MockEnvironment environment = new MockEnvironment();
-		MutablePropertySources propertySources = environment.getPropertySources();
-		propertySources
-			.addFirst(new OneBootstrap<>(new SecretsPropertySource(new SourceData("secret", Map.of("a", "b")))));
-
-		List<? extends PropertySource> result = ConfigReloadUtil.findPropertySources(PlainPropertySource.class,
-				environment);
-		assertThat(result.size()).isEqualTo(1);
-		assertThat(result.get(0).getProperty("a")).isEqualTo("b");
 	}
 
 	private static final class OneComposite extends CompositePropertySource {

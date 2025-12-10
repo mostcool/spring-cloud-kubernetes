@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2022 the original author or authors.
+ * Copyright 2013-present the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
+import static org.springframework.cloud.kubernetes.commons.config.ReadType.BATCH;
+import static org.springframework.cloud.kubernetes.commons.config.ReadType.SINGLE;
+
 /**
  * @author wind57
  *
@@ -36,8 +39,6 @@ class ConfigMapConfigPropertiesBindingTests {
 		new ApplicationContextRunner().withUserConfiguration(Config.class).run(context -> {
 			ConfigMapConfigProperties props = context.getBean(ConfigMapConfigProperties.class);
 			Assertions.assertThat(props).isNotNull();
-			Assertions.assertThat(props.enableApi()).isTrue();
-			Assertions.assertThat(props.paths().isEmpty()).isTrue();
 			Assertions.assertThat(props.sources().isEmpty()).isTrue();
 			Assertions.assertThat(props.labels().isEmpty()).isTrue();
 			Assertions.assertThat(props.enabled()).isTrue();
@@ -46,6 +47,7 @@ class ConfigMapConfigPropertiesBindingTests {
 			Assertions.assertThat(props.useNameAsPrefix()).isFalse();
 			Assertions.assertThat(props.includeProfileSpecificSources()).isTrue();
 			Assertions.assertThat(props.failFast()).isFalse();
+			Assertions.assertThat(props.readType()).isSameAs(BATCH);
 
 			Assertions.assertThat(props.retry()).isNotNull();
 			Assertions.assertThat(props.retry().initialInterval()).isEqualTo(1000L);
@@ -59,9 +61,7 @@ class ConfigMapConfigPropertiesBindingTests {
 	@Test
 	void testWithNonDefaults() {
 		new ApplicationContextRunner().withUserConfiguration(Config.class)
-			.withPropertyValues("spring.cloud.kubernetes.config.enableApi=false",
-					"spring.cloud.kubernetes.config.paths[0]=a", "spring.cloud.kubernetes.config.paths[1]=b",
-					"spring.cloud.kubernetes.config.sources[0].name=source-a",
+			.withPropertyValues("spring.cloud.kubernetes.config.sources[0].name=source-a",
 					"spring.cloud.kubernetes.config.sources[0].namespace=source-namespace-a",
 					"spring.cloud.kubernetes.config.sources[0].labels.key=source-value",
 					"spring.cloud.kubernetes.config.sources[0].explicit-prefix=source-prefix",
@@ -77,15 +77,11 @@ class ConfigMapConfigPropertiesBindingTests {
 					"spring.cloud.kubernetes.config.retry.multiplier=1.2",
 					"spring.cloud.kubernetes.config.retry.max-interval=3",
 					"spring.cloud.kubernetes.config.retry.max-attempts=4",
-					"spring.cloud.kubernetes.config.retry.enabled=false")
+					"spring.cloud.kubernetes.config.retry.enabled=false",
+					"spring.cloud.kubernetes.config.read-type=SINGLE")
 			.run(context -> {
 				ConfigMapConfigProperties props = context.getBean(ConfigMapConfigProperties.class);
 				Assertions.assertThat(props).isNotNull();
-				Assertions.assertThat(props.enableApi()).isFalse();
-
-				Assertions.assertThat(props.paths().size()).isEqualTo(2);
-				Assertions.assertThat(props.paths().get(0)).isEqualTo("a");
-				Assertions.assertThat(props.paths().get(1)).isEqualTo("b");
 
 				Assertions.assertThat(props.sources().size()).isEqualTo(1);
 				ConfigMapConfigProperties.Source source = props.sources().get(0);
@@ -106,6 +102,7 @@ class ConfigMapConfigPropertiesBindingTests {
 				Assertions.assertThat(props.useNameAsPrefix()).isTrue();
 				Assertions.assertThat(props.includeProfileSpecificSources()).isTrue();
 				Assertions.assertThat(props.failFast()).isTrue();
+				Assertions.assertThat(props.readType()).isSameAs(SINGLE);
 
 				RetryProperties retryProperties = props.retry();
 				Assertions.assertThat(retryProperties).isNotNull();
