@@ -18,7 +18,6 @@ package org.springframework.cloud.kubernetes.configuration.watcher;
 
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -31,11 +30,11 @@ import io.kubernetes.client.openapi.models.V1ConfigMapBuilder;
 import io.kubernetes.client.openapi.models.V1Secret;
 import io.kubernetes.client.openapi.models.V1SecretBuilder;
 
-import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
+import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.NativeClientKubernetesFixture;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import static org.awaitility.Awaitility.await;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.builder;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.retrySpec;
 
@@ -66,23 +65,23 @@ final class TestUtil {
 		StubMapping stubMapping = WireMock.stubFor(WireMock.post(WireMock.urlEqualTo("/actuator/refresh"))
 			.willReturn(WireMock.aResponse().withBody("{}").withStatus(200)));
 
-		await().atMost(Duration.ofSeconds(60))
-			.pollInterval(Duration.ofSeconds(1))
-			.ignoreException(SocketTimeoutException.class)
-			.until(() -> stubMapping.getResponse().wasConfigured());
+		Awaitilities.awaitUntil(60, 1000, SocketTimeoutException.class,
+				() -> stubMapping.getResponse().wasConfigured());
 	}
 
 	static void verifyActuatorCalled(int timesCalled) {
-		await().atMost(Duration.ofSeconds(60)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+
+		Awaitilities.awaitUntil(60, 1000, () -> {
 			List<LoggedRequest> requests = WireMock
 				.findAll(WireMock.postRequestedFor(WireMock.urlEqualTo("/actuator/refresh")));
 			return !requests.isEmpty();
 		});
+
 		WireMock.verify(WireMock.exactly(timesCalled),
 				WireMock.postRequestedFor(WireMock.urlEqualTo("/actuator/refresh")));
 	}
 
-	static void createConfigMap(Util util, String namespace) {
+	static void createConfigMap(NativeClientKubernetesFixture k8sNativeKubernetesFixture, String namespace) {
 		V1ConfigMap configMap = new V1ConfigMapBuilder().editOrNewMetadata()
 			.withName("service-wiremock")
 			.withNamespace(namespace)
@@ -90,19 +89,19 @@ final class TestUtil {
 			.endMetadata()
 			.addToData("foo", "bar")
 			.build();
-		util.createAndWait(namespace, configMap, null);
+		k8sNativeKubernetesFixture.createAndWait(namespace, configMap, null);
 	}
 
-	static void deleteConfigMap(Util util, String namespace) {
+	static void deleteConfigMap(NativeClientKubernetesFixture k8sNativeKubernetesFixture, String namespace) {
 		V1ConfigMap configMap = new V1ConfigMapBuilder().editOrNewMetadata()
 			.withName("service-wiremock")
 			.withNamespace(namespace)
 			.endMetadata()
 			.build();
-		util.deleteAndWait(namespace, configMap, null);
+		k8sNativeKubernetesFixture.deleteAndWait(namespace, configMap, null);
 	}
 
-	static void createSecret(Util util, String namespace) {
+	static void createSecret(NativeClientKubernetesFixture k8sNativeKubernetesFixture, String namespace) {
 		V1Secret secret = new V1SecretBuilder().editOrNewMetadata()
 			.withLabels(Map.of("spring.cloud.kubernetes.secret", "true"))
 			.withName("service-wiremock")
@@ -110,16 +109,16 @@ final class TestUtil {
 			.endMetadata()
 			.addToData("color", Base64.getEncoder().encode("purple".getBytes(StandardCharsets.UTF_8)))
 			.build();
-		util.createAndWait(namespace, null, secret);
+		k8sNativeKubernetesFixture.createAndWait(namespace, null, secret);
 	}
 
-	static void deleteSecret(Util util, String namespace) {
+	static void deleteSecret(NativeClientKubernetesFixture k8sNativeKubernetesFixture, String namespace) {
 		V1Secret secret = new V1SecretBuilder().editOrNewMetadata()
 			.withName("service-wiremock")
 			.withNamespace(namespace)
 			.endMetadata()
 			.build();
-		util.deleteAndWait(namespace, null, secret);
+		k8sNativeKubernetesFixture.deleteAndWait(namespace, null, secret);
 	}
 
 }

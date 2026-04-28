@@ -24,7 +24,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import io.kubernetes.client.informer.SharedInformer;
+import io.kubernetes.client.informer.SharedIndexInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.informer.cache.Lister;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
@@ -33,6 +33,7 @@ import io.kubernetes.client.openapi.models.V1EndpointSubset;
 import io.kubernetes.client.openapi.models.V1Endpoints;
 import io.kubernetes.client.openapi.models.V1Service;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.apache.commons.logging.LogFactory;
 
 import org.springframework.cloud.client.ServiceInstance;
@@ -45,12 +46,10 @@ import org.springframework.core.log.LogAccessor;
 
 import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientDiscoveryClientUtils.addresses;
 import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientDiscoveryClientUtils.endpointSubsetsPortData;
-import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientDiscoveryClientUtils.matchesServiceLabels;
 import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientDiscoveryClientUtils.postConstruct;
 import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientDiscoveryClientUtils.serviceMetadata;
-import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientInstanceIdHostPodNameSupplier.externalName;
-import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientInstanceIdHostPodNameSupplier.nonExternalName;
-import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientPodLabelsAndAnnotationsSupplier.nonExternalName;
+import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientInstanceIdHostPodNameSupplier.instanceIdHostPodNameSupplier;
+import static org.springframework.cloud.kubernetes.client.discovery.KubernetesClientPodLabelsAndAnnotationsSupplier.podLabelsAndAnnotationsSupplier;
 import static org.springframework.cloud.kubernetes.commons.discovery.DiscoveryClientUtils.endpointsPort;
 import static org.springframework.cloud.kubernetes.commons.discovery.DiscoveryClientUtils.externalNameServiceInstance;
 import static org.springframework.cloud.kubernetes.commons.discovery.DiscoveryClientUtils.serviceInstance;
@@ -80,8 +79,9 @@ abstract class KubernetesClientBlockingAbstractInformerDiscoveryClient implement
 
 	KubernetesClientBlockingAbstractInformerDiscoveryClient(List<SharedInformerFactory> sharedInformerFactories,
 			List<Lister<V1Service>> serviceListers, List<Lister<V1Endpoints>> endpointsListers,
-			List<SharedInformer<V1Service>> serviceInformers, List<SharedInformer<V1Endpoints>> endpointsInformers,
-			KubernetesDiscoveryProperties properties, CoreV1Api coreV1Api, Predicate<V1Service> predicate) {
+			List<SharedIndexInformer<V1Service>> serviceInformers,
+			List<SharedIndexInformer<V1Endpoints>> endpointsInformers, KubernetesDiscoveryProperties properties,
+			CoreV1Api coreV1Api, Predicate<V1Service> predicate) {
 		this.sharedInformerFactories = sharedInformerFactories;
 		this.serviceListers = serviceListers;
 		this.endpointsListers = endpointsListers;
@@ -93,11 +93,11 @@ abstract class KubernetesClientBlockingAbstractInformerDiscoveryClient implement
 
 		this.informersReadyFunc = () -> {
 			boolean serviceInformersReady = serviceInformers.isEmpty() || serviceInformers.stream()
-				.map(SharedInformer::hasSynced)
+				.map(SharedIndexInformer::hasSynced)
 				.reduce(Boolean::logicalAnd)
 				.orElse(false);
 			boolean endpointsInformersReady = endpointsInformers.isEmpty() || endpointsInformers.stream()
-				.map(SharedInformer::hasSynced)
+				.map(SharedIndexInformer::hasSynced)
 				.reduce(Boolean::logicalAnd)
 				.orElse(false);
 			return serviceInformersReady && endpointsInformersReady;
@@ -109,7 +109,6 @@ abstract class KubernetesClientBlockingAbstractInformerDiscoveryClient implement
 	public List<String> getServices() {
 		List<String> services = serviceListers.stream()
 			.flatMap(serviceLister -> serviceLister.list().stream())
-			.filter(service -> matchesServiceLabels(service, properties))
 			.filter(predicate)
 			.map(s -> s.getMetadata().getName())
 			.distinct()
@@ -124,14 +123,13 @@ abstract class KubernetesClientBlockingAbstractInformerDiscoveryClient implement
 
 		List<V1Service> allServices = serviceListers.stream()
 			.flatMap(x -> x.list().stream())
-			.filter(scv -> scv.getMetadata() != null)
-			.filter(svc -> serviceId.equals(svc.getMetadata().getName()))
-			.filter(scv -> matchesServiceLabels(scv, properties))
+			.filter(service -> service.getMetadata() != null)
+			.filter(service -> serviceId.equals(service.getMetadata().getName()))
 			.toList();
 
 		List<ServiceInstance> serviceInstances = allServices.stream()
 			.filter(predicate)
-			.flatMap(service -> serviceInstances(service, serviceId).stream())
+			.flatMap(service -> serviceInstances(service).stream())
 			.collect(Collectors.toCollection(ArrayList::new));
 
 		if (properties.includeExternalNameServices()) {
@@ -145,7 +143,8 @@ abstract class KubernetesClientBlockingAbstractInformerDiscoveryClient implement
 				Map<String, String> serviceInstanceMetadata = serviceInstanceMetadata(Map.of(), serviceMetadata,
 						properties);
 
-				KubernetesClientInstanceIdHostPodNameSupplier supplierOne = externalName(service);
+				KubernetesClientInstanceIdHostPodNameSupplier supplierOne = KubernetesClientInstanceIdHostPodNameSupplier
+					.instanceIdHostPodNameSupplier(service);
 				ServiceInstance externalNameServiceInstance = externalNameServiceInstance(serviceMetadata, supplierOne,
 						serviceInstanceMetadata);
 				serviceInstances.add(externalNameServiceInstance);
@@ -167,14 +166,24 @@ abstract class KubernetesClientBlockingAbstractInformerDiscoveryClient implement
 		postConstruct(sharedInformerFactories, properties, informersReadyFunc, serviceListers);
 	}
 
-	private List<ServiceInstance> serviceInstances(V1Service service, String serviceId) {
+	@PreDestroy
+	void preDestroy() {
+		sharedInformerFactories.forEach(SharedInformerFactory::stopAllRegisteredInformers);
+	}
+
+	private List<ServiceInstance> serviceInstances(V1Service service) {
+
+		String serviceId = service.getMetadata().getName();
+		String serviceNamespace = service.getMetadata().getNamespace();
 
 		List<ServiceInstance> instances = new ArrayList<>();
 
 		List<V1Endpoints> allEndpoints = endpointsListers.stream()
-			.map(endpointsLister -> endpointsLister.namespace(service.getMetadata().getNamespace()).get(serviceId))
+			.map(endpointsLister -> endpointsLister.namespace(serviceNamespace).get(serviceId))
 			.filter(Objects::nonNull)
 			.toList();
+
+		ServiceMetadata k8sServiceMetadata = serviceMetadata(service);
 
 		for (V1Endpoints endpoints : allEndpoints) {
 			List<V1EndpointSubset> subsets = endpoints.getSubsets();
@@ -182,26 +191,27 @@ abstract class KubernetesClientBlockingAbstractInformerDiscoveryClient implement
 				LOG.debug(() -> "serviceId : " + serviceId + " does not have any subsets");
 			}
 			else {
-				ServiceMetadata serviceMetadata = serviceMetadata(service);
 				Map<String, Integer> portsData = endpointSubsetsPortData(subsets);
-				Map<String, String> serviceInstanceMetadata = serviceInstanceMetadata(portsData, serviceMetadata,
+				Map<String, String> serviceInstanceMetadata = serviceInstanceMetadata(portsData, k8sServiceMetadata,
 						properties);
 
 				for (V1EndpointSubset endpointSubset : subsets) {
 
 					Map<String, Integer> endpointsPortData = endpointSubsetsPortData(List.of(endpointSubset));
-					ServicePortNameAndNumber portData = endpointsPort(endpointsPortData, serviceMetadata, properties);
+					ServicePortNameAndNumber portData = endpointsPort(endpointsPortData, k8sServiceMetadata,
+							properties);
 
 					List<V1EndpointAddress> addresses = addresses(endpointSubset, properties);
 					for (V1EndpointAddress endpointAddress : addresses) {
 
-						KubernetesClientInstanceIdHostPodNameSupplier supplierOne = nonExternalName(endpointAddress,
-								service);
-						KubernetesClientPodLabelsAndAnnotationsSupplier supplierTwo = nonExternalName(coreV1Api,
-								service.getMetadata().getNamespace());
+						KubernetesClientInstanceIdHostPodNameSupplier instanceIdHostPodNameSupplier = instanceIdHostPodNameSupplier(
+								endpointAddress, service);
+						KubernetesClientPodLabelsAndAnnotationsSupplier podLabelsAndAnnotationsSupplier = podLabelsAndAnnotationsSupplier(
+								coreV1Api, service.getMetadata().getNamespace());
 
-						ServiceInstance serviceInstance = serviceInstance(servicePortSecureResolver, serviceMetadata,
-								supplierOne, supplierTwo, portData, serviceInstanceMetadata, properties);
+						ServiceInstance serviceInstance = serviceInstance(servicePortSecureResolver, k8sServiceMetadata,
+								instanceIdHostPodNameSupplier, podLabelsAndAnnotationsSupplier, portData,
+								serviceInstanceMetadata, properties);
 						instances.add(serviceInstance);
 					}
 				}

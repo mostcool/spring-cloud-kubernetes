@@ -30,7 +30,6 @@ import io.fabric8.kubernetes.api.model.SecretListBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
 import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,12 +48,16 @@ import org.springframework.cloud.kubernetes.commons.config.reload.PollingSecrets
 import org.springframework.cloud.kubernetes.fabric8.config.Fabric8SecretsPropertySource;
 import org.springframework.cloud.kubernetes.fabric8.config.Fabric8SecretsPropertySourceLocator;
 import org.springframework.cloud.kubernetes.fabric8.config.VisibleFabric8SecretsPropertySourceLocator;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.AbstractEnvironment;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
-import org.springframework.mock.env.MockEnvironment;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.test.context.ContextConfiguration;
 
 /**
  * @author wind57
@@ -63,9 +66,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 		properties = { "spring.main.allow-bean-definition-overriding=true",
 				"logging.level.org.springframework.cloud.kubernetes.commons.config=debug" },
 		classes = { PollingReloadSecretTest.TestConfig.class })
+@ContextConfiguration(initializers = PollingReloadSecretTest.Initializer.class)
 @EnableKubernetesMockClient
 @ExtendWith(OutputCaptureExtension.class)
-
 class PollingReloadSecretTest {
 
 	private static final boolean FAIL_FAST = false;
@@ -98,7 +101,7 @@ class PollingReloadSecretTest {
 	void test(CapturedOutput output) {
 		// we fail while reading 'secretOne'
 		kubernetesMockServer.expect().withPath(PATH).andReturn(500, "Internal Server Error").once();
-		Awaitility.await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+		Awaitilities.awaitUntil(20, 1000, () -> {
 			boolean one = output.getOut().contains("Failure in reading named sources");
 			boolean two = output.getOut().contains("Failed to load source");
 			boolean three = output.getOut()
@@ -114,10 +117,7 @@ class PollingReloadSecretTest {
 			.once();
 
 		// it passes while reading 'secretTwo'
-		Awaitility.await()
-			.atMost(Duration.ofSeconds(20))
-			.pollInterval(Duration.ofSeconds(1))
-			.until(STRATEGY_CALLED::get);
+		Awaitilities.awaitUntil(20, 1000, STRATEGY_CALLED::get);
 	}
 
 	private static Secret secret(String name, Map<String, String> data) {
@@ -140,35 +140,6 @@ class PollingReloadSecretTest {
 			scheduler.initialize();
 			return new PollingSecretsChangeDetector(environment, configReloadProperties, configurationUpdateStrategy,
 					Fabric8SecretsPropertySource.class, fabric8SecretsPropertySourceLocator, scheduler);
-		}
-
-		@Bean
-		@Primary
-		AbstractEnvironment environment() {
-
-			// needed so that our environment is populated with 'something'
-			// this call is done in the method that returns the AbstractEnvironment
-			Secret secretOne = secret(SECRET_NAME, Map.of());
-			kubernetesMockServer.expect()
-				.withPath(PATH)
-				.andReturn(200, new SecretListBuilder().withItems(secretOne).build())
-				.once();
-
-			MockEnvironment mockEnvironment = new MockEnvironment();
-			mockEnvironment.setProperty("spring.cloud.kubernetes.client.namespace", NAMESPACE);
-
-			// simulate that environment already has a Fabric8SecretsPropertySource,
-			// otherwise we can't properly test reload functionality
-			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
-					SECRET_NAME, NAMESPACE, false, true, true, RetryProperties.DEFAULT, ReadType.BATCH);
-			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(mockEnvironment);
-
-			PropertySource<?> propertySource = new VisibleFabric8SecretsPropertySourceLocator(kubernetesClient,
-					secretsConfigProperties, namespaceProvider)
-				.locate(mockEnvironment);
-
-			mockEnvironment.getPropertySources().addFirst(propertySource);
-			return mockEnvironment;
 		}
 
 		@Bean
@@ -206,6 +177,34 @@ class PollingReloadSecretTest {
 				SecretsConfigProperties secretsConfigProperties, KubernetesNamespaceProvider namespaceProvider) {
 			return new VisibleFabric8SecretsPropertySourceLocator(kubernetesClient, secretsConfigProperties,
 					namespaceProvider);
+		}
+
+	}
+
+	static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+
+		@Override
+		public void initialize(ConfigurableApplicationContext context) {
+
+			ConfigurableEnvironment environment = context.getEnvironment();
+			Secret secretOne = secret(SECRET_NAME, Map.of());
+			kubernetesMockServer.expect()
+				.withPath(PATH)
+				.andReturn(200, new SecretListBuilder().withItems(secretOne).build())
+				.once();
+
+			// simulate that environment already has a Fabric8SecretsPropertySource,
+			// otherwise we can't properly test reload functionality
+			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
+					SECRET_NAME, NAMESPACE, false, true, true, RetryProperties.DEFAULT, ReadType.BATCH);
+			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(environment);
+
+			PropertySource<?> propertySource = new VisibleFabric8SecretsPropertySourceLocator(kubernetesClient,
+					secretsConfigProperties, namespaceProvider)
+				.locate(environment);
+
+			environment.getPropertySources().addFirst(propertySource);
+
 		}
 
 	}

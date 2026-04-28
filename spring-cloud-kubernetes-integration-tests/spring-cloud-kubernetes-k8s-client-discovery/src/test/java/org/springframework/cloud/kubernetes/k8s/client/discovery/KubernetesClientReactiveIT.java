@@ -16,25 +16,21 @@
 
 package org.springframework.cloud.kubernetes.k8s.client.discovery;
 
+import java.util.Map;
 import java.util.Set;
 
 import io.kubernetes.client.openapi.ApiClient;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.cloud.client.discovery.ReactiveDiscoveryClient;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.cloud.kubernetes.integration.tests.commons.k3s.NativeClientIntegrationTest;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.convention.TestBean;
 
 import static org.springframework.cloud.kubernetes.k8s.client.discovery.TestAssertions.assertPodMetadata;
 import static org.springframework.cloud.kubernetes.k8s.client.discovery.TestAssertions.assertReactiveConfiguration;
@@ -42,31 +38,27 @@ import static org.springframework.cloud.kubernetes.k8s.client.discovery.TestAsse
 /**
  * @author wind57
  */
-@SpringBootTest(classes = { DiscoveryApp.class, KubernetesClientReactiveIT.TestConfig.class },
-		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = { DiscoveryApp.class }, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(
 		properties = { "spring.cloud.discovery.reactive.enabled=true", "spring.cloud.discovery.blocking.enabled=false",
 				"logging.level.org.springframework.cloud.kubernetes.commons.discovery=debug",
 				"logging.level.org.springframework.cloud.client.discovery.health=debug",
 				"logging.level.org.springframework.cloud.kubernetes.client.discovery=debug" })
+@NativeClientIntegrationTest(wiremock = @NativeClientIntegrationTest.Wiremock(enabled = true,
+		namespaces = { "default" }, withNodePort = true))
 class KubernetesClientReactiveIT extends KubernetesClientDiscoveryBase {
+
+	@TestBean
+	private ApiClient apiClient;
+
+	@TestBean
+	private KubernetesDiscoveryProperties kubernetesDiscoveryProperties;
 
 	@LocalManagementPort
 	private int port;
 
 	@Autowired
 	private ReactiveDiscoveryClient discoveryClient;
-
-	@BeforeEach
-	void beforeEach() {
-		Images.loadWiremock(K3S);
-		util.wiremock(NAMESPACE, Phase.CREATE, true);
-	}
-
-	@AfterEach
-	void afterEach() {
-		util.wiremock(NAMESPACE, Phase.DELETE, true);
-	}
 
 	/**
 	 * <pre>
@@ -83,21 +75,8 @@ class KubernetesClientReactiveIT extends KubernetesClientDiscoveryBase {
 		assertPodMetadata(discoveryClient);
 	}
 
-	@TestConfiguration
-	static class TestConfig {
-
-		@Bean
-		@Primary
-		ApiClient client() {
-			return apiClient();
-		}
-
-		@Bean
-		@Primary
-		KubernetesDiscoveryProperties kubernetesDiscoveryProperties() {
-			return discoveryProperties(false, Set.of(NAMESPACE), null);
-		}
-
+	private static KubernetesDiscoveryProperties kubernetesDiscoveryProperties() {
+		return discoveryProperties(false, Set.of(DEFAULT_NAMESPACE), null, Map.of());
 	}
 
 }

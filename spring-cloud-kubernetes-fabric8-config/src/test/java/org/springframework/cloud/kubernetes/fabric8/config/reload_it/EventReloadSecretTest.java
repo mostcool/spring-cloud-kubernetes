@@ -32,7 +32,6 @@ import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,11 +50,15 @@ import org.springframework.cloud.kubernetes.commons.config.reload.ConfigurationU
 import org.springframework.cloud.kubernetes.fabric8.config.Fabric8SecretsPropertySourceLocator;
 import org.springframework.cloud.kubernetes.fabric8.config.VisibleFabric8SecretsPropertySourceLocator;
 import org.springframework.cloud.kubernetes.fabric8.config.reload.Fabric8EventBasedSecretsChangeDetector;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.AbstractEnvironment;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
-import org.springframework.mock.env.MockEnvironment;
+import org.springframework.test.context.ContextConfiguration;
 
 /**
  * @author wind57
@@ -64,9 +67,9 @@ import org.springframework.mock.env.MockEnvironment;
 		properties = { "spring.main.allow-bean-definition-overriding=true",
 				"logging.level.org.springframework.cloud.kubernetes.commons.config=debug" },
 		classes = { EventReloadSecretTest.TestConfig.class })
+@ContextConfiguration(initializers = EventReloadSecretTest.Initializer.class)
 @EnableKubernetesMockClient(crud = true)
 @ExtendWith(OutputCaptureExtension.class)
-
 class EventReloadSecretTest {
 
 	private static final boolean FAIL_FAST = false;
@@ -100,7 +103,7 @@ class EventReloadSecretTest {
 			.inNamespace(NAMESPACE);
 
 		// makes sure that when 'onEvent' is triggered (because we added a config map)
-		// the call to /api/v1/namespaces/spring-k8s/secrets will fail with an
+		// the call to /api/v1/namespaces/spring-k8s/secrets will not fail with an
 		// Exception
 		MixedOperation<Secret, SecretList, Resource<Secret>> mixedOperation = Mockito.mock(MixedOperation.class);
 		NonNamespaceOperation<Secret, SecretList, Resource<Secret>> mockedOperation = Mockito
@@ -117,7 +120,7 @@ class EventReloadSecretTest {
 		operation.resource(secretTwo).create();
 
 		// we fail while reading 'secretTwo'
-		Awaitility.await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+		Awaitilities.awaitUntil(10, 1000, () -> {
 			boolean one = output.getOut().contains("Failure in reading named sources");
 			boolean two = output.getOut().contains("Failed to load source");
 			boolean three = output.getOut()
@@ -133,10 +136,7 @@ class EventReloadSecretTest {
 		operation.resource(secretOne).update();
 
 		// it passes while reading 'secretOne'
-		Awaitility.await()
-			.atMost(Duration.ofSeconds(10))
-			.pollInterval(Duration.ofSeconds(1))
-			.until(STRATEGY_CALLED::get);
+		Awaitilities.awaitUntil(10, 1000, STRATEGY_CALLED::get);
 	}
 
 	private static Secret secret(String name, Map<String, String> data) {
@@ -162,29 +162,8 @@ class EventReloadSecretTest {
 
 		@Bean
 		@Primary
-		AbstractEnvironment environment() {
-			MockEnvironment mockEnvironment = new MockEnvironment();
-			mockEnvironment.setProperty("spring.cloud.kubernetes.client.namespace", NAMESPACE);
-
-			// simulate that environment already has a
-			// Fabric8SecretsPropertySourceLocator,
-			// otherwise we can't properly test reload functionality
-			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
-					SECRET_NAME, NAMESPACE, false, true, true, RetryProperties.DEFAULT, ReadType.SINGLE);
-			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(mockEnvironment);
-
-			PropertySource<?> propertySource = new VisibleFabric8SecretsPropertySourceLocator(kubernetesClient,
-					secretsConfigProperties, namespaceProvider)
-				.locate(mockEnvironment);
-
-			mockEnvironment.getPropertySources().addFirst(propertySource);
-			return mockEnvironment;
-		}
-
-		@Bean
-		@Primary
 		ConfigReloadProperties configReloadProperties() {
-			return new ConfigReloadProperties(true, true, false, ConfigReloadProperties.ReloadStrategy.REFRESH,
+			return new ConfigReloadProperties(true, true, true, ConfigReloadProperties.ReloadStrategy.REFRESH,
 					ConfigReloadProperties.ReloadDetectionMode.EVENT, Duration.ofMillis(2000), Set.of(NAMESPACE), false,
 					Duration.ofSeconds(2));
 		}
@@ -192,8 +171,8 @@ class EventReloadSecretTest {
 		@Bean
 		@Primary
 		SecretsConfigProperties secretsConfigProperties() {
-			return new SecretsConfigProperties(true, List.of(), Map.of(), SECRET_NAME, NAMESPACE, false, true,
-					FAIL_FAST, RetryProperties.DEFAULT, ReadType.SINGLE);
+			return new SecretsConfigProperties(true, List.of(), Map.of(), SECRET_NAME, NAMESPACE, true, true, FAIL_FAST,
+					RetryProperties.DEFAULT, ReadType.SINGLE);
 		}
 
 		@Bean
@@ -216,6 +195,30 @@ class EventReloadSecretTest {
 				SecretsConfigProperties secretsConfigProperties, KubernetesNamespaceProvider namespaceProvider) {
 			return new VisibleFabric8SecretsPropertySourceLocator(kubernetesClient, secretsConfigProperties,
 					namespaceProvider);
+		}
+
+	}
+
+	static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+
+		@Override
+		public void initialize(ConfigurableApplicationContext context) {
+
+			ConfigurableEnvironment environment = context.getEnvironment();
+
+			// simulate that environment already has a
+			// Fabric8SecretsPropertySourceLocator,
+			// otherwise we can't properly test reload functionality
+			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
+					SECRET_NAME, NAMESPACE, false, true, true, RetryProperties.DEFAULT, ReadType.SINGLE);
+			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(environment);
+
+			PropertySource<?> propertySource = new VisibleFabric8SecretsPropertySourceLocator(kubernetesClient,
+					secretsConfigProperties, namespaceProvider)
+				.locate(environment);
+
+			environment.getPropertySources().addFirst(propertySource);
+
 		}
 
 	}

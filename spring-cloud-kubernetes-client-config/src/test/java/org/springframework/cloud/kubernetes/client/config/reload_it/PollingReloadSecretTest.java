@@ -28,14 +28,12 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import io.kubernetes.client.openapi.ApiClient;
-import io.kubernetes.client.openapi.Configuration;
 import io.kubernetes.client.openapi.JSON;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1Secret;
 import io.kubernetes.client.openapi.models.V1SecretBuilder;
 import io.kubernetes.client.openapi.models.V1SecretList;
 import io.kubernetes.client.util.ClientBuilder;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -54,12 +52,16 @@ import org.springframework.cloud.kubernetes.commons.config.SecretsConfigProperti
 import org.springframework.cloud.kubernetes.commons.config.reload.ConfigReloadProperties;
 import org.springframework.cloud.kubernetes.commons.config.reload.ConfigurationUpdateStrategy;
 import org.springframework.cloud.kubernetes.commons.config.reload.PollingSecretsChangeDetector;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.AbstractEnvironment;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
-import org.springframework.mock.env.MockEnvironment;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.test.context.ContextConfiguration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -73,6 +75,7 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
 		properties = { "spring.main.allow-bean-definition-overriding=true",
 				"logging.level.org.springframework.cloud.kubernetes.commons.config=debug" },
 		classes = { PollingReloadSecretTest.TestConfig.class })
+@ContextConfiguration(initializers = { PollingReloadSecretTest.Initializer.class })
 @ExtendWith(OutputCaptureExtension.class)
 class PollingReloadSecretTest {
 
@@ -100,9 +103,7 @@ class PollingReloadSecretTest {
 		WireMock.configureFor("localhost", wireMockServer.port());
 
 		ApiClient client = new ClientBuilder().setBasePath("http://localhost:" + wireMockServer.port()).build();
-		client.setDebugging(true);
-		Configuration.setDefaultApiClient(client);
-		coreV1Api = new CoreV1Api();
+		coreV1Api = new CoreV1Api(client);
 	}
 
 	@AfterAll
@@ -127,7 +128,7 @@ class PollingReloadSecretTest {
 			.willSetStateTo("go-to-ok"));
 
 		// we fail while reading 'secretOne'
-		Awaitility.await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+		Awaitilities.awaitUntil(10, 1000, () -> {
 			boolean one = output.getOut().contains("Failure in reading named sources");
 			boolean two = output.getOut().contains("Failed to load source");
 			boolean three = output.getOut()
@@ -144,10 +145,7 @@ class PollingReloadSecretTest {
 			.whenScenarioStateIs("go-to-ok"));
 
 		// it passes while reading 'secretTwo'
-		Awaitility.await()
-			.atMost(Duration.ofSeconds(20))
-			.pollInterval(Duration.ofSeconds(1))
-			.until(STRATEGY_CALLED::get);
+		Awaitilities.awaitUntil(20, 1000, STRATEGY_CALLED::get);
 	}
 
 	private static V1Secret secret(String name, Map<String, String> data) {
@@ -176,38 +174,6 @@ class PollingReloadSecretTest {
 
 		@Bean
 		@Primary
-		AbstractEnvironment environment() {
-
-			V1Secret secretOne = secret(SECRET_NAME, Map.of());
-			V1SecretList listOne = new V1SecretList().addItemsItem(secretOne);
-
-			// needed so that our environment is populated with 'something'
-			// this call is done in the method that returns the AbstractEnvironment
-			stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(listOne)))
-				.inScenario(SCENARIO_NAME)
-				.whenScenarioStateIs(Scenario.STARTED)
-				.willSetStateTo("go-to-fail"));
-
-			MockEnvironment mockEnvironment = new MockEnvironment();
-			mockEnvironment.setProperty("spring.cloud.kubernetes.client.namespace", NAMESPACE);
-
-			// simulate that environment already has a
-			// KubernetesClientSecretPropertySource,
-			// otherwise we can't properly test reload functionality
-			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
-					SECRET_NAME, NAMESPACE, false, true, false, RetryProperties.DEFAULT, ReadType.BATCH);
-			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(mockEnvironment);
-
-			PropertySource<?> propertySource = new KubernetesClientSecretsPropertySourceLocator(coreV1Api,
-					namespaceProvider, secretsConfigProperties)
-				.locate(mockEnvironment);
-
-			mockEnvironment.getPropertySources().addFirst(propertySource);
-			return mockEnvironment;
-		}
-
-		@Bean
-		@Primary
 		ConfigReloadProperties configReloadProperties() {
 			return new ConfigReloadProperties(true, false, true, ConfigReloadProperties.ReloadStrategy.REFRESH,
 					ConfigReloadProperties.ReloadDetectionMode.POLLING, Duration.ofMillis(2000), Set.of("non-default"),
@@ -230,9 +196,7 @@ class PollingReloadSecretTest {
 		@Bean
 		@Primary
 		ConfigurationUpdateStrategy configurationUpdateStrategy() {
-			return new ConfigurationUpdateStrategy("to-console", () -> {
-				STRATEGY_CALLED.set(true);
-			});
+			return new ConfigurationUpdateStrategy("to-console", () -> STRATEGY_CALLED.set(true));
 		}
 
 		@Bean
@@ -241,6 +205,40 @@ class PollingReloadSecretTest {
 				SecretsConfigProperties secretsConfigProperties, KubernetesNamespaceProvider namespaceProvider) {
 			return new KubernetesClientSecretsPropertySourceLocator(coreV1Api, namespaceProvider,
 					secretsConfigProperties);
+		}
+
+	}
+
+	static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+
+		@Override
+		public void initialize(ConfigurableApplicationContext context) {
+
+			ConfigurableEnvironment environment = context.getEnvironment();
+
+			V1Secret secretOne = secret(SECRET_NAME, Map.of());
+			V1SecretList listOne = new V1SecretList().addItemsItem(secretOne);
+
+			// needed so that our environment is populated with 'something'
+			// this call is done in the method that returns the AbstractEnvironment
+			stubFor(get(PATH).willReturn(aResponse().withStatus(200).withBody(JSON.serialize(listOne)))
+				.inScenario(SCENARIO_NAME)
+				.whenScenarioStateIs(Scenario.STARTED)
+				.willSetStateTo("go-to-fail"));
+
+			// simulate that environment already has a
+			// KubernetesClientSecretPropertySource,
+			// otherwise we can't properly test reload functionality
+			SecretsConfigProperties secretsConfigProperties = new SecretsConfigProperties(true, List.of(), Map.of(),
+					SECRET_NAME, NAMESPACE, false, true, false, RetryProperties.DEFAULT, ReadType.BATCH);
+			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(environment);
+
+			PropertySource<?> propertySource = new KubernetesClientSecretsPropertySourceLocator(coreV1Api,
+					namespaceProvider, secretsConfigProperties)
+				.locate(environment);
+
+			environment.getPropertySources().addFirst(propertySource);
+
 		}
 
 	}

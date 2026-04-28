@@ -16,21 +16,19 @@
 
 package org.springframework.cloud.kubernetes.k8s.client.discovery;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.test.json.BasicJsonTester;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.cloud.client.ServiceInstance;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.client.discovery.ReactiveDiscoveryClient;
 import org.springframework.cloud.kubernetes.commons.discovery.DefaultKubernetesServiceInstance;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.builder;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.retrySpec;
 
@@ -55,9 +53,7 @@ final class TestAssertions {
 	}
 
 	static void assertLogStatement(CapturedOutput output, String textToAssert) {
-		await().atMost(Duration.ofSeconds(60))
-			.pollInterval(Duration.ofMillis(200))
-			.untilAsserted(() -> assertThat(output.getOut()).contains(textToAssert));
+		Awaitilities.awaitUntilAsserted(60, 200, () -> assertThat(output.getOut()).contains(textToAssert));
 	}
 
 	/**
@@ -85,7 +81,7 @@ final class TestAssertions {
 		assertThat(BASIC_JSON_TESTER.from(healthResult)).extractingJsonPathStringValue(BLOCKING_STATUS).isEqualTo("UP");
 
 		assertThat(BASIC_JSON_TESTER.from(healthResult)).extractingJsonPathArrayValue(BLOCKING_SERVICES)
-			.containsExactlyInAnyOrder("kubernetes", "service-wiremock");
+			.contains("kubernetes", "service-wiremock", "busybox-service");
 
 		assertThat(BASIC_JSON_TESTER.from(healthResult)).doesNotHaveJsonPath(REACTIVE_STATUS);
 
@@ -119,20 +115,6 @@ final class TestAssertions {
 			.containsExactlyInAnyOrder("kubernetes", "service-wiremock");
 
 		assertThat(BASIC_JSON_TESTER.from(healthResult)).doesNotHaveJsonPath(BLOCKING_STATUS);
-
-	}
-
-	static void assertPodMetadata(DiscoveryClient discoveryClient) {
-
-		List<ServiceInstance> serviceInstances = discoveryClient.getInstances("service-wiremock");
-		assertThat(serviceInstances).hasSize(1);
-		DefaultKubernetesServiceInstance wiremockInstance = (DefaultKubernetesServiceInstance) serviceInstances.get(0);
-
-		assertThat(wiremockInstance.getServiceId()).isEqualTo("service-wiremock");
-		assertThat(wiremockInstance.getInstanceId()).isNotNull();
-		assertThat(wiremockInstance.getHost()).isNotNull();
-		assertThat(wiremockInstance.getMetadata()).isEqualTo(
-				Map.of("k8s_namespace", "default", "type", "NodePort", "port.http", "8080", "app", "service-wiremock"));
 
 	}
 

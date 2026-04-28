@@ -16,21 +16,24 @@
 
 package org.springframework.cloud.kubernetes.fabric8.client.discovery;
 
+import java.util.Map;
+import java.util.Set;
+
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.k3s.K3sContainer;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
-import org.springframework.cloud.kubernetes.integration.tests.commons.fabric8_client.Util;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.convention.TestBean;
 
 /**
  * @author wind57
@@ -45,16 +48,22 @@ import org.springframework.test.context.TestPropertySource;
 		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 abstract class Fabric8DiscoveryBase {
 
-	protected static final String NAMESPACE = "default";
+	@TestBean
+	private KubernetesClient kubernetesClient;
 
-	protected static final K3sContainer K3S = Commons.container();
+	protected static KubernetesDiscoveryProperties discoveryProperties(Set<String> namespaces,
+			Map<String, String> labels) {
+		KubernetesDiscoveryProperties.Metadata metadata = new KubernetesDiscoveryProperties.Metadata(true, null, true,
+				null, true, "port.", true, true);
+		return new KubernetesDiscoveryProperties(true, true, namespaces, true, 60, false, null, Set.of(443, 8443),
+				labels, null, metadata, 0, false, true, null);
+	}
 
-	protected static Util util;
-
-	@BeforeAll
-	protected static void beforeAll() {
-		K3S.start();
-		util = new Util(K3S);
+	private static KubernetesClient kubernetesClient() {
+		// K3sContextInitializer makes sure it is started
+		String kubeConfigYaml = Commons.container().getKubeConfigYaml();
+		Config config = Config.fromKubeconfig(kubeConfigYaml);
+		return new KubernetesClientBuilder().withConfig(config).build();
 	}
 
 	@TestConfiguration
@@ -62,10 +71,16 @@ abstract class Fabric8DiscoveryBase {
 
 		@Bean
 		@Primary
-		KubernetesClient kubernetesClient() {
-			String kubeConfigYaml = K3S.getKubeConfigYaml();
-			Config config = Config.fromKubeconfig(kubeConfigYaml);
-			return new KubernetesClientBuilder().withConfig(config).build();
+		@ConditionalOnProperty(value = "all.namespaces.no.labels", havingValue = "true", matchIfMissing = false)
+		KubernetesDiscoveryProperties kubernetesDiscoveryProperties() {
+			return discoveryProperties(Set.of(), Map.of());
+		}
+
+		@Bean
+		@Primary
+		@ConditionalOnProperty(value = "all.namespaces.wiremock.labels", havingValue = "true", matchIfMissing = false)
+		KubernetesDiscoveryProperties kubernetesDiscoveryPropertiesAllNamespacesWiremockLabels() {
+			return discoveryProperties(Set.of(), Map.of("app", "service-wiremock"));
 		}
 
 	}

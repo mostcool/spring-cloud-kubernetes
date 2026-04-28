@@ -53,9 +53,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class KubernetesClientDiscoveryClientTests {
 
-	private static final SharedInformerStub<V1Service> SERVICE_SHARED_INFORMER_STUB = new SharedInformerStub<>();
+	private static final SharedIndexedInformerStub<V1Service> SERVICE_SHARED_INFORMER_STUB = new SharedIndexedInformerStub<>();
 
-	private static final SharedInformerStub<V1Endpoints> ENDPOINTS_SHARED_INFORMER_STUB = new SharedInformerStub<>();
+	private static final SharedIndexedInformerStub<V1Endpoints> ENDPOINTS_SHARED_INFORMER_STUB = new SharedIndexedInformerStub<>();
 
 	private static CoreV1Api coreV1Api;
 
@@ -247,7 +247,8 @@ class KubernetesClientDiscoveryClientTests {
 			.build();
 		endpointsCache.add(endpoints);
 
-		V1Service service = new V1ServiceBuilder().withNewMetadata()
+		V1Service service = new V1ServiceBuilder().withSpec(new V1ServiceSpecBuilder().withType("ClusterIP").build())
+			.withNewMetadata()
 			.withName("endpoint1")
 			.withNamespace("test")
 			.and()

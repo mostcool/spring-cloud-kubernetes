@@ -16,27 +16,22 @@
 
 package org.springframework.cloud.kubernetes.fabric8.client.discovery;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.k3s.K3sContainer;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
+import org.springframework.cloud.kubernetes.integration.tests.commons.k3s.Fabric8ClientIntegrationTest;
 import org.springframework.test.context.TestPropertySource;
 
 import static org.springframework.cloud.kubernetes.fabric8.client.discovery.TestAssertions.assertBlockingConfiguration;
 import static org.springframework.cloud.kubernetes.fabric8.client.discovery.TestAssertions.assertPodMetadata;
 
-/**
- * @author wind57
- */
-@TestPropertySource(properties = { "spring.cloud.discovery.reactive.enabled=false",
-		"logging.level.org.springframework.cloud.client.discovery.health=DEBUG",
-		"logging.level.org.springframework.cloud.kubernetes.commons.discovery=DEBUG" })
+@Fabric8ClientIntegrationTest(namespaces = "default", busyboxNamespaces = "default", wiremockNamespaces = "default")
 class Fabric8DiscoveryBlockingIT extends Fabric8DiscoveryBase {
 
 	@LocalManagementPort
@@ -45,32 +40,50 @@ class Fabric8DiscoveryBlockingIT extends Fabric8DiscoveryBase {
 	@Autowired
 	private DiscoveryClient discoveryClient;
 
-	@BeforeEach
-	void beforeEach() {
-		Images.loadBusybox(K3S);
-		util.busybox(NAMESPACE, Phase.CREATE);
+	@Nested
+	@TestPropertySource(properties = { "spring.cloud.discovery.reactive.enabled=false",
+			"logging.level.org.springframework.cloud.client.discovery.health=DEBUG",
+			"logging.level.org.springframework.cloud.kubernetes.commons.discovery=DEBUG",
+			"all.namespaces.no.labels=true" })
+	class AllNamespacesNoLabels {
+
+		@Test
+		void test(CapturedOutput output, K3sContainer container) throws Exception {
+
+			String[] busyboxPods = container
+				.execInContainer("sh", "-c", "kubectl get pods -l app=busybox -o=name --no-headers")
+				.getStdout()
+				.split("\n");
+
+			String podOne = busyboxPods[0].split("/")[1];
+			String podTwo = busyboxPods[1].split("/")[1];
+
+			container.execInContainer("sh", "-c", "kubectl label pods " + podOne + " my-label=my-value");
+			container.execInContainer("sh", "-c", "kubectl annotate pods " + podTwo + " my-annotation=my-value");
+
+			assertBlockingConfiguration(output, port);
+			assertPodMetadata(discoveryClient);
+
+			Assertions.assertThat(discoveryClient.getServices())
+				.contains("kubernetes", "busybox-service", "service-wiremock");
+		}
+
 	}
 
-	@AfterEach
-	void afterEach() {
-		util.busybox(NAMESPACE, Phase.DELETE);
-	}
+	@Nested
+	@TestPropertySource(properties = { "spring.cloud.discovery.reactive.enabled=false",
+			"logging.level.org.springframework.cloud.client.discovery.health=DEBUG",
+			"logging.level.org.springframework.cloud.kubernetes.commons.discovery=DEBUG",
+			"all.namespaces.wiremock.labels=true" })
+	class AllNamespacesWiremockLabels {
 
-	@Test
-	void test(CapturedOutput output) throws Exception {
+		@Test
+		void test() {
+			Assertions.assertThat(discoveryClient.getServices())
+				.contains("service-wiremock")
+				.doesNotContain("busybox-service");
+		}
 
-		String[] busyboxPods = K3S.execInContainer("sh", "-c", "kubectl get pods -l app=busybox -o=name --no-headers")
-			.getStdout()
-			.split("\n");
-
-		String podOne = busyboxPods[0].split("/")[1];
-		String podTwo = busyboxPods[1].split("/")[1];
-
-		K3S.execInContainer("sh", "-c", "kubectl label pods " + podOne + " my-label=my-value");
-		K3S.execInContainer("sh", "-c", "kubectl annotate pods " + podTwo + " my-annotation=my-value");
-
-		assertBlockingConfiguration(output, port);
-		assertPodMetadata(discoveryClient);
 	}
 
 }

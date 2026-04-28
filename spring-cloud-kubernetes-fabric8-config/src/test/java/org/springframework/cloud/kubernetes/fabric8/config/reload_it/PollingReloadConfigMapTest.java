@@ -28,7 +28,6 @@ import io.fabric8.kubernetes.api.model.ConfigMapListBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
 import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,12 +46,16 @@ import org.springframework.cloud.kubernetes.commons.config.reload.PollingConfigM
 import org.springframework.cloud.kubernetes.fabric8.config.Fabric8ConfigMapPropertySource;
 import org.springframework.cloud.kubernetes.fabric8.config.Fabric8ConfigMapPropertySourceLocator;
 import org.springframework.cloud.kubernetes.fabric8.config.VisibleFabric8ConfigMapPropertySourceLocator;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.AbstractEnvironment;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
-import org.springframework.mock.env.MockEnvironment;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.test.context.ContextConfiguration;
 
 /**
  * @author wind57
@@ -61,6 +64,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 		properties = { "spring.main.allow-bean-definition-overriding=true",
 				"logging.level.org.springframework.cloud.kubernetes.commons.config=debug" },
 		classes = { PollingReloadConfigMapTest.TestConfig.class })
+@ContextConfiguration(initializers = PollingReloadConfigMapTest.Initializer.class)
 @EnableKubernetesMockClient
 @ExtendWith(OutputCaptureExtension.class)
 class PollingReloadConfigMapTest {
@@ -95,7 +99,7 @@ class PollingReloadConfigMapTest {
 	void test(CapturedOutput output) {
 		// we fail while reading 'configMapOne'
 		kubernetesMockServer.expect().withPath(PATH).andReturn(500, "Internal Server Error").once();
-		Awaitility.await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+		Awaitilities.awaitUntil(20, 1000, () -> {
 			boolean one = output.getOut().contains("Failure in reading named sources");
 			boolean two = output.getOut().contains("Failed to load source");
 			boolean three = output.getOut()
@@ -111,10 +115,7 @@ class PollingReloadConfigMapTest {
 			.once();
 
 		// it passes while reading 'configMapTwo'
-		Awaitility.await()
-			.atMost(Duration.ofSeconds(20))
-			.pollInterval(Duration.ofSeconds(1))
-			.until(STRATEGY_CALLED::get);
+		Awaitilities.awaitUntil(20, 1000, STRATEGY_CALLED::get);
 	}
 
 	private static ConfigMap configMap(String name, Map<String, String> data) {
@@ -133,35 +134,6 @@ class PollingReloadConfigMapTest {
 			scheduler.initialize();
 			return new PollingConfigMapChangeDetector(environment, configReloadProperties, configurationUpdateStrategy,
 					Fabric8ConfigMapPropertySource.class, fabric8ConfigMapPropertySourceLocator, scheduler);
-		}
-
-		@Bean
-		@Primary
-		AbstractEnvironment environment() {
-
-			// needed so that our environment is populated with 'something'
-			// this call is done in the method that returns the AbstractEnvironment
-			ConfigMap configMapOne = configMap(CONFIG_MAP_NAME, Map.of());
-			kubernetesMockServer.expect()
-				.withPath(PATH)
-				.andReturn(200, new ConfigMapListBuilder().withItems(configMapOne).build())
-				.once();
-
-			MockEnvironment mockEnvironment = new MockEnvironment();
-			mockEnvironment.setProperty("spring.cloud.kubernetes.client.namespace", NAMESPACE);
-
-			// simulate that environment already has a Fabric8ConfigMapPropertySource,
-			// otherwise we can't properly test reload functionality
-			ConfigMapConfigProperties configMapConfigProperties = new ConfigMapConfigProperties(true, List.of(),
-					Map.of(), CONFIG_MAP_NAME, NAMESPACE, false, true, true, RetryProperties.DEFAULT, ReadType.BATCH);
-			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(mockEnvironment);
-
-			PropertySource<?> propertySource = new VisibleFabric8ConfigMapPropertySourceLocator(kubernetesClient,
-					configMapConfigProperties, namespaceProvider)
-				.locate(mockEnvironment);
-
-			mockEnvironment.getPropertySources().addFirst(propertySource);
-			return mockEnvironment;
 		}
 
 		@Bean
@@ -199,6 +171,35 @@ class PollingReloadConfigMapTest {
 				ConfigMapConfigProperties configMapConfigProperties, KubernetesNamespaceProvider namespaceProvider) {
 			return new VisibleFabric8ConfigMapPropertySourceLocator(kubernetesClient, configMapConfigProperties,
 					namespaceProvider);
+		}
+
+	}
+
+	static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+
+		@Override
+		public void initialize(ConfigurableApplicationContext context) {
+
+			ConfigurableEnvironment environment = context.getEnvironment();
+
+			ConfigMap configMapOne = configMap(CONFIG_MAP_NAME, Map.of());
+			kubernetesMockServer.expect()
+				.withPath(PATH)
+				.andReturn(200, new ConfigMapListBuilder().withItems(configMapOne).build())
+				.once();
+
+			// simulate that environment already has a Fabric8ConfigMapPropertySource,
+			// otherwise we can't properly test reload functionality
+			ConfigMapConfigProperties configMapConfigProperties = new ConfigMapConfigProperties(true, List.of(),
+					Map.of(), CONFIG_MAP_NAME, NAMESPACE, false, true, true, RetryProperties.DEFAULT, ReadType.BATCH);
+			KubernetesNamespaceProvider namespaceProvider = new KubernetesNamespaceProvider(environment);
+
+			PropertySource<?> propertySource = new VisibleFabric8ConfigMapPropertySourceLocator(kubernetesClient,
+					configMapConfigProperties, namespaceProvider)
+				.locate(environment);
+
+			environment.getPropertySources().addFirst(propertySource);
+
 		}
 
 	}

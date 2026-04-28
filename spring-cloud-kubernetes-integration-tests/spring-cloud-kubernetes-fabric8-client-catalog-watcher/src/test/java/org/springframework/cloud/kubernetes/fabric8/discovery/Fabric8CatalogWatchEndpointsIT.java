@@ -18,54 +18,39 @@ package org.springframework.cloud.kubernetes.fabric8.discovery;
 
 import java.util.Set;
 
+import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.fabric8_client.Fabric8ClientKubernetesFixture;
+import org.springframework.cloud.kubernetes.integration.tests.commons.k3s.Fabric8ClientIntegrationTest;
+import org.springframework.test.context.bean.override.convention.TestBean;
 
-import static org.springframework.cloud.kubernetes.fabric8.discovery.Fabric8CatalogWatchEndpointsIT.TestConfig;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.TestAssertions.assertLogStatement;
 import static org.springframework.cloud.kubernetes.fabric8.discovery.TestAssertions.invokeAndAssert;
 
 /**
  * @author wind57
  */
-@SpringBootTest(classes = { Fabric8CatalogWatchAutoConfiguration.class, TestConfig.class, Application.class },
+@SpringBootTest(classes = { Fabric8CatalogWatchAutoConfiguration.class, Application.class },
 		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Fabric8ClientIntegrationTest(namespaces = { "a", "b" }, busyboxNamespaces = { "a", "b" })
 class Fabric8CatalogWatchEndpointsIT extends Fabric8CatalogWatchBase {
+
+	@TestBean
+	private KubernetesClient client;
+
+	@TestBean
+	private KubernetesDiscoveryProperties kubernetesDiscoveryProperties;
 
 	@LocalServerPort
 	private int port;
-
-	@BeforeEach
-	void beforeEach() {
-
-		util.createNamespace(NAMESPACE_A);
-		util.createNamespace(NAMESPACE_B);
-
-		Images.loadBusybox(K3S);
-
-		util.busybox(NAMESPACE_A, Phase.CREATE);
-		util.busybox(NAMESPACE_B, Phase.CREATE);
-
-	}
-
-	@AfterEach
-	void afterEach() {
-		// busybox is deleted as part of the assertions, thus not seen here
-		util.deleteNamespace(NAMESPACE_A);
-		util.deleteNamespace(NAMESPACE_B);
-	}
 
 	/**
 	 * <pre>
@@ -78,26 +63,20 @@ class Fabric8CatalogWatchEndpointsIT extends Fabric8CatalogWatchBase {
 	 * </pre>
 	 */
 	@Test
-	void test(CapturedOutput output) {
+	void test(CapturedOutput output, Fabric8ClientKubernetesFixture fixture) {
 		assertLogStatement(output, "stateGenerator is of type: Fabric8EndpointsCatalogWatch");
-		invokeAndAssert(util, Set.of(NAMESPACE_A, NAMESPACE_B), port, NAMESPACE_A);
+		invokeAndAssert(fixture, Set.of("a", "b"), port, "a");
 	}
 
-	@TestConfiguration
-	static class TestConfig {
+	private static KubernetesDiscoveryProperties kubernetesDiscoveryProperties() {
+		return discoveryProperties(false, Set.of("default", "a"));
+	}
 
-		@Bean
-		@Primary
-		KubernetesClient kubernetesClient() {
-			return client();
-		}
-
-		@Bean
-		@Primary
-		KubernetesDiscoveryProperties kubernetesDiscoveryProperties() {
-			return discoveryProperties(false, Set.of(NAMESPACE, NAMESPACE_A));
-		}
-
+	private static KubernetesClient client() {
+		// K3sContextInitializer makes sure it is started
+		String kubeConfigYaml = Commons.container().getKubeConfigYaml();
+		Config config = Config.fromKubeconfig(kubeConfigYaml);
+		return new KubernetesClientBuilder().withConfig(config).build();
 	}
 
 }

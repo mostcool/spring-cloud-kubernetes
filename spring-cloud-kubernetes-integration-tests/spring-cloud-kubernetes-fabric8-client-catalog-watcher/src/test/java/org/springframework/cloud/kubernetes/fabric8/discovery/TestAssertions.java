@@ -16,25 +16,21 @@
 
 package org.springframework.cloud.kubernetes.fabric8.discovery;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import org.assertj.core.api.Assertions;
-import org.awaitility.Awaitility;
-
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.cloud.kubernetes.commons.discovery.EndpointNameAndNamespace;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
-import org.springframework.cloud.kubernetes.integration.tests.commons.fabric8_client.Util;
+import org.springframework.cloud.kubernetes.integration.tests.commons.fabric8_client.Fabric8ClientKubernetesFixture;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.ResolvableType;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.builder;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Commons.retrySpec;
 
@@ -48,10 +44,7 @@ final class TestAssertions {
 	}
 
 	static void assertLogStatement(CapturedOutput output, String textToAssert) {
-		Awaitility.await()
-			.during(Duration.ofSeconds(5))
-			.pollInterval(Duration.ofMillis(200))
-			.untilAsserted(() -> Assertions.assertThat(output.getOut()).contains(textToAssert));
+		Awaitilities.awaitUntil(5, 200, () -> output.getOut().contains(textToAssert));
 	}
 
 	/**
@@ -59,13 +52,14 @@ final class TestAssertions {
 	 * for them is different.
 	 */
 	@SuppressWarnings("unchecked")
-	static void invokeAndAssert(Util util, Set<String> namespaces, int port, String assertionNamespace) {
+	static void invokeAndAssert(Fabric8ClientKubernetesFixture fabric8KubernetesFixture, Set<String> namespaces,
+			int port, String assertionNamespace) {
 
 		WebClient client = builder().baseUrl("http://localhost:" + port + "/result").build();
 		EndpointNameAndNamespace[] holder = new EndpointNameAndNamespace[2];
 		ResolvableType resolvableType = ResolvableType.forClassWithGenerics(List.class, EndpointNameAndNamespace.class);
 
-		await().pollInterval(Duration.ofMillis(200)).atMost(Duration.ofSeconds(30)).until(() -> {
+		Awaitilities.awaitUntil(30, 200, () -> {
 			List<EndpointNameAndNamespace> result = (List<EndpointNameAndNamespace>) client.method(HttpMethod.GET)
 				.retrieve()
 				.bodyToMono(ParameterizedTypeReference.forType(resolvableType.getType()))
@@ -96,9 +90,9 @@ final class TestAssertions {
 		assertThat(resultOne.namespace()).isEqualTo(assertionNamespace);
 		assertThat(resultTwo.namespace()).isEqualTo(assertionNamespace);
 
-		namespaces.forEach(namespace -> util.busybox(namespace, Phase.DELETE));
+		namespaces.forEach(namespace -> fabric8KubernetesFixture.busybox(namespace, Phase.DELETE));
 
-		await().pollInterval(Duration.ofSeconds(1)).atMost(Duration.ofSeconds(240)).until(() -> {
+		Awaitilities.awaitUntil(240, 1000, () -> {
 			List<EndpointNameAndNamespace> result = (List<EndpointNameAndNamespace>) client.method(HttpMethod.GET)
 				.retrieve()
 				.bodyToMono(ParameterizedTypeReference.forType(resolvableType.getType()))

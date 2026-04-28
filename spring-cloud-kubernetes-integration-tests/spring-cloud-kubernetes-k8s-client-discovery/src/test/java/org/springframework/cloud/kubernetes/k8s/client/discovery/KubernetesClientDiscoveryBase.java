@@ -24,14 +24,11 @@ import java.util.Set;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.util.Config;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.k3s.K3sContainer;
 
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
-import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -45,20 +42,11 @@ import org.springframework.test.context.TestPropertySource;
 @ExtendWith(OutputCaptureExtension.class)
 abstract class KubernetesClientDiscoveryBase {
 
-	protected static final String NAMESPACE = "default";
-
-	protected static final K3sContainer K3S = Commons.container();
-
-	protected static Util util;
-
-	@BeforeAll
-	protected static void beforeAll() {
-		K3S.start();
-		util = new Util(K3S);
-	}
+	protected static final String DEFAULT_NAMESPACE = "default";
 
 	protected static ApiClient apiClient() {
-		String kubeConfigYaml = K3S.getKubeConfigYaml();
+		// K3sContextInitializer makes sure it is started
+		String kubeConfigYaml = Commons.container().getKubeConfigYaml();
 
 		ApiClient client;
 		try {
@@ -70,12 +58,12 @@ abstract class KubernetesClientDiscoveryBase {
 		return new CoreV1Api(client).getApiClient();
 	}
 
-	protected static KubernetesDiscoveryProperties discoveryProperties(boolean useEndpointSlices,
-			Set<String> namespaces, String filter) {
+	protected static KubernetesDiscoveryProperties discoveryProperties(boolean allNamespaces, Set<String> namespaces,
+			String filter, Map<String, String> labels) {
 		KubernetesDiscoveryProperties.Metadata metadata = new KubernetesDiscoveryProperties.Metadata(true, null, true,
 				null, true, "port.", true, true);
-		return new KubernetesDiscoveryProperties(true, false, namespaces, true, 60, false, filter, Set.of(443, 8443),
-				Map.of(), null, metadata, 0, useEndpointSlices, true, null);
+		return new KubernetesDiscoveryProperties(true, allNamespaces, namespaces, true, 60, false, filter,
+				Set.of(443, 8443), labels, null, metadata, 0, false, true, null);
 	}
 
 }

@@ -17,7 +17,9 @@
 package org.springframework.cloud.kubernetes.integration.tests.commons;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,7 +49,6 @@ import org.springframework.util.StreamUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import static org.awaitility.Awaitility.await;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Constants.KUBERNETES_VERSION_FILE;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Constants.TEMP_FOLDER;
 import static org.springframework.cloud.kubernetes.integration.tests.commons.Constants.TMP_IMAGES;
@@ -65,6 +66,10 @@ public final class Commons {
 
 	private static final Log LOG = LogFactory.getLog(Commons.class);
 
+	private static final String DOCKER_IO = "docker.io/";
+
+	private static final String DOCKER_IO_LIBRARY = DOCKER_IO + "library/";
+
 	private Commons() {
 		throw new AssertionError("No instance provided");
 	}
@@ -73,14 +78,19 @@ public final class Commons {
 		return CONTAINER;
 	}
 
-	public static void loadSpringCloudKubernetesImage(String project, K3sContainer container) throws Exception {
-		loadImage("springcloud/" + project, pomVersion(), project, container);
+	public static void loadSpringCloudKubernetesImage(String project, K3sContainer container) {
+		try {
+			loadImage("springcloud/" + project, pomVersion(), project, container);
+		}
+		catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	/**
 	 * create a tar, copy it in the running k3s and load this tar as an image.
 	 */
-	public static void loadImage(String image, String tag, String tarName, K3sContainer container) throws Exception {
+	public static void loadImage(String image, String tag, String tarName, K3sContainer container) {
 
 		if (imageAlreadyInK3s(container, tarName)) {
 			return;
@@ -91,12 +101,23 @@ public final class Commons {
 			InputStream imageStream = saveImageCmd.withTag(tag).exec();
 
 			Path imagePath = Paths.get(TEMP_FOLDER + "/" + tarName + ".tar");
-			Files.copy(imageStream, imagePath, StandardCopyOption.REPLACE_EXISTING);
+			try {
+				Files.copy(imageStream, imagePath, StandardCopyOption.REPLACE_EXISTING);
+			}
+			catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
 			// import image with ctr. this works because TEMP_FOLDER is mounted in the
 			// container
-			await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(1)).until(() -> {
-				Container.ExecResult result = container.execInContainer("ctr", "i", "import",
-						TEMP_FOLDER + "/" + tarName + ".tar");
+			Awaitilities.awaitUntil(120, 1000, () -> {
+				Container.ExecResult result = null;
+				try {
+					result = container.execInContainer("ctr", "i", "import",
+							Constants.TEMP_FOLDER + "/" + tarName + ".tar");
+				}
+				catch (Exception e) {
+					throw new RuntimeException(e);
+				}
 				boolean noErrors = result.getStderr() == null || result.getStderr().isEmpty();
 				if (!noErrors) {
 					LOG.info("error is : " + result.getStderr());
@@ -142,14 +163,59 @@ public final class Commons {
 		}
 
 		try {
-			LOG.info("no tars found, will resort to pulling the image");
+			LOG.info("pulling image inside k3s to avoid Docker save/ctr import compatibility issues");
 			LOG.info("using : " + imageVersion + " for : " + imageNameForDownload);
-			pullImage(imageNameForDownload, imageVersion, tarName, container);
-			loadImage(imageNameForDownload, imageVersion, tarName, container);
+			pullImageInsideK3s(container, imageNameForDownload, imageVersion);
 		}
 		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	/**
+	 * Pull image directly inside the K3s container via ctr (containerd). This avoids
+	 * Docker save + ctr import, which can fail with "content digest not found" for
+	 * multi-platform or OCI images. If DOCKER_HUB_USERNAME and DOCKER_HUB_PASSWORD are
+	 * set, they are passed as {@code --user username:password} for registry auth.
+	 */
+	private static void pullImageInsideK3s(K3sContainer container, String imageNameForDownload, String imageVersion) {
+		String fullImageRef = fullImageReference(imageNameForDownload, imageVersion);
+
+		final String[] ctrArgs = buildCtrPullArgs(fullImageRef);
+		Awaitilities.awaitUntil(120, 1, () -> {
+			try {
+				Container.ExecResult result = container.execInContainer(ctrArgs);
+				boolean noErrors = result.getStderr() == null || result.getStderr().isEmpty();
+				if (!noErrors) {
+					LOG.info("ctr pull stderr: " + result.getStderr());
+				}
+				return noErrors;
+			}
+			catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+
+		});
+	}
+
+	private static String[] buildCtrPullArgs(String fullImageRef) {
+		String username = System.getenv("DOCKER_HUB_USERNAME");
+		String password = System.getenv("DOCKER_HUB_PASSWORD");
+		if (username != null && !username.isBlank() && password != null && !password.isBlank()) {
+			LOG.info("pulling inside k3s with Docker Hub credentials: " + fullImageRef);
+			return new String[] { "ctr", "-n", "k8s.io", "images", "pull", "--user", username + ":" + password,
+					fullImageRef };
+		}
+		LOG.info("pulling inside k3s: " + fullImageRef);
+		return new String[] { "ctr", "-n", "k8s.io", "images", "pull", fullImageRef };
+	}
+
+	private static String fullImageReference(String imageName, String imageVersion) {
+		String imageNameAndVersion = imageName + ":" + imageVersion;
+		if (imageName.contains("/")) {
+			return DOCKER_IO + imageNameAndVersion;
+		}
+		return DOCKER_IO_LIBRARY + imageNameAndVersion;
 	}
 
 	/**
@@ -201,19 +267,25 @@ public final class Commons {
 	public static void waitForLogStatement(String message, K3sContainer k3sContainer, String appLabelValue) {
 		try {
 
-			await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(4)).until(() -> {
+			Awaitilities.awaitUntil(120, 1000, () -> {
 
-				String appPodName = k3sContainer
-					.execInContainer("sh", "-c",
-							"kubectl get pods -l app=" + appLabelValue
-									+ " -o custom-columns=POD:metadata.name,STATUS:status.phase"
-									+ " | grep -i 'running' | awk '{print $1}' | tr -d '\n' ")
-					.getStdout();
+				try {
+					String appPodName = k3sContainer
+						.execInContainer("sh", "-c",
+								"kubectl get pods -l app=" + appLabelValue
+										+ " -o custom-columns=POD:metadata.name,STATUS:status.phase"
+										+ " | grep -i 'running' | awk '{print $1}' | tr -d '\n' ")
+						.getStdout();
 
-				String execResult = k3sContainer.execInContainer("sh", "-c", "kubectl logs " + appPodName.trim())
-					.getStdout();
-				return execResult.contains(message);
+					String execResult = k3sContainer.execInContainer("sh", "-c", "kubectl logs " + appPodName.trim())
+						.getStdout();
+					return execResult.contains(message);
+				}
+				catch (Exception e) {
+					throw new RuntimeException(e);
+				}
 			});
+
 		}
 		catch (Exception e) {
 			throw new RuntimeException(e);
@@ -230,8 +302,14 @@ public final class Commons {
 	}
 
 	private static void loadImageFromPath(String tarName, K3sContainer container) {
-		await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(1)).until(() -> {
-			Container.ExecResult result = container.execInContainer("ctr", "i", "import", TMP_IMAGES + "/" + tarName);
+		Awaitilities.awaitUntil(120, 1000, () -> {
+			Container.ExecResult result;
+			try {
+				result = container.execInContainer("ctr", "i", "import", Constants.TMP_IMAGES + "/" + tarName);
+			}
+			catch (Exception e) {
+				throw new RuntimeException(e);
+			}
 			boolean noErrors = result.getStderr() == null || result.getStderr().isEmpty();
 			if (!noErrors) {
 				LOG.info("error is : " + result.getStderr());

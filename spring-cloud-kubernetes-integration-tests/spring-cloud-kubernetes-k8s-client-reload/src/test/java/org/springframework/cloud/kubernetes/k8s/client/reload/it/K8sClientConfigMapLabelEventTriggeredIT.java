@@ -16,12 +16,8 @@
 
 package org.springframework.cloud.kubernetes.k8s.client.reload.it;
 
-import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 
-import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1ConfigMap;
 import io.kubernetes.client.openapi.models.V1ConfigMapBuilder;
@@ -35,27 +31,25 @@ import org.mockito.Mockito;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.cloud.kubernetes.client.KubernetesClientUtils;
 import org.springframework.cloud.kubernetes.commons.KubernetesNamespaceProvider;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
+import org.springframework.cloud.kubernetes.integration.tests.commons.k3s.NativeClientIntegrationTest;
+import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.NativeClientKubernetesFixture;
 import org.springframework.cloud.kubernetes.k8s.client.reload.App;
 import org.springframework.cloud.kubernetes.k8s.client.reload.RightProperties;
 import org.springframework.cloud.kubernetes.k8s.client.reload.RightWithLabelsProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.TestPropertySource;
-
-import static org.awaitility.Awaitility.await;
 
 /**
  * @author wind57
  */
-@SpringBootTest(classes = { App.class, K8sClientConfigMapLabelEventTriggeredIT.TestConfig.class },
-		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = { App.class }, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = { "spring.main.cloud-platform=kubernetes", "spring.profiles.active=three",
 		"spring.cloud.bootstrap.enabled=true",
 		"logging.level.org.springframework.cloud.kubernetes.client.config.reload=debug" })
+@NativeClientIntegrationTest(namespaces = "right")
 class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 
 	private static final MockedStatic<KubernetesClientUtils> KUBERNETES_CLIENT_UTILS_MOCKED_STATIC = Mockito
@@ -75,7 +69,7 @@ class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 	private CoreV1Api coreV1Api;
 
 	@BeforeAll
-	static void beforeAllLocal() {
+	static void beforeAllLocal(NativeClientKubernetesFixture fixture) {
 
 		KUBERNETES_CLIENT_UTILS_MOCKED_STATIC.when(KubernetesClientUtils::createApiClientForInformerClient)
 			.thenReturn(apiClient());
@@ -83,23 +77,19 @@ class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 		KUBERNETES_CLIENT_UTILS_MOCKED_STATIC
 			.when(() -> KubernetesClientUtils.getApplicationNamespace(Mockito.anyString(), Mockito.anyString(),
 					Mockito.any(KubernetesNamespaceProvider.class)))
-			.thenReturn(NAMESPACE_RIGHT);
+			.thenReturn("right");
 
-		util.createNamespace(NAMESPACE_RIGHT);
-		rightConfigMap = (V1ConfigMap) util.yaml("right-configmap.yaml");
-		rightConfigMapWithLabel = (V1ConfigMap) util.yaml("right-configmap-with-label.yaml");
-		util.createAndWait(NAMESPACE_RIGHT, rightConfigMap, null);
-		util.createAndWait(NAMESPACE_RIGHT, rightConfigMapWithLabel, null);
+		rightConfigMap = fixture.yaml("right-configmap.yaml", V1ConfigMap.class);
+		rightConfigMapWithLabel = fixture.yaml("right-configmap-with-label.yaml", V1ConfigMap.class);
+		fixture.createAndWait("right", rightConfigMap, null);
+		fixture.createAndWait("right", rightConfigMapWithLabel, null);
 	}
 
 	@AfterAll
-	static void afterAllLocal() {
-
+	static void afterAllLocal(NativeClientKubernetesFixture fixture) {
 		KUBERNETES_CLIENT_UTILS_MOCKED_STATIC.close();
-
-		util.deleteAndWait(NAMESPACE_RIGHT, rightConfigMap, null);
-		util.deleteAndWait(NAMESPACE_RIGHT, rightConfigMapWithLabel, null);
-		util.deleteNamespace(NAMESPACE_RIGHT);
+		fixture.deleteAndWait("right", rightConfigMap, null);
+		fixture.deleteAndWait("right", rightConfigMapWithLabel, null);
 	}
 
 	/**
@@ -115,7 +105,7 @@ class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 
 		assertReloadLogStatements(
 				"added configmap informer for namespace : "
-						+ "right with filter : spring.cloud.kubernetes.config.informer.enabled=true",
+						+ "right with labels : {spring.cloud.kubernetes.config.informer.enabled=true}",
 				"added secret informer for namespace", output);
 
 		// read the initial value from the right-configmap
@@ -126,20 +116,20 @@ class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 
 		// then deploy a new version of right-configmap
 		V1ConfigMap rightConfigMapAfterChange = new V1ConfigMapBuilder()
-			.withMetadata(new V1ObjectMeta().namespace(NAMESPACE_RIGHT).name("right-configmap"))
+			.withMetadata(new V1ObjectMeta().namespace("right")
+				.name("right-configmap")
+				.labels(Map.of("spring.cloud.kubernetes.config.informer.enabled", "true")))
 			.withData(Map.of("right.value", "right-after-change"))
 			.build();
 
 		replaceConfigMap(coreV1Api, rightConfigMapAfterChange);
 
-		// sleep for 5 seconds
-		LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(5));
-		Assertions.assertThat(rightProperties.getValue()).isEqualTo("right-after-change");
+		Awaitilities.awaitUntil(10, 1000, () -> rightProperties.getValue().equals("right-after-change"));
 
 		// then deploy a new version of right-configmap-with-label
 		// but only add a label, this does not trigger a refresh
 		V1ConfigMap rightWithLabelConfigMap = new V1ConfigMapBuilder()
-			.withMetadata(new V1ObjectMeta().namespace(NAMESPACE_RIGHT)
+			.withMetadata(new V1ObjectMeta().namespace("right")
 				.name("right-configmap-with-label")
 				.labels(Map.of("spring.cloud.kubernetes.config.informer.enabled", "true", "custom.label",
 						"spring-k8s")))
@@ -148,18 +138,15 @@ class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 
 		replaceConfigMap(coreV1Api, rightWithLabelConfigMap);
 
-		await().atMost(Duration.ofSeconds(60))
-			.pollDelay(Duration.ofSeconds(1))
-			.until(() -> output.getOut().contains("data in configmap has not changed, will not reload"));
-
-		await().atMost(Duration.ofSeconds(60))
-			.pollInterval(Duration.ofSeconds(1))
-			.until(() -> rightWithLabelsProperties.getValue().equals("right-with-label-initial"));
+		Awaitilities.awaitUntil(60, 1000,
+				() -> output.getOut().contains("data in configmap has not changed, will not reload"));
+		Awaitilities.awaitUntil(60, 1000,
+				() -> rightWithLabelsProperties.getValue().equals("right-with-label-initial"));
 
 		// then deploy a new version of right-configmap-with-label
 		// that changes data also
 		V1ConfigMap rightWithLabelConfigMapAfterChange = new V1ConfigMapBuilder()
-			.withMetadata(new V1ObjectMeta().namespace(NAMESPACE_RIGHT)
+			.withMetadata(new V1ObjectMeta().namespace("right")
 				.name("right-configmap-with-label")
 				.labels(Map.of("spring.cloud.kubernetes.config.informer.enabled", "true")))
 			.withData(Map.of("right.with.label.value", "right-with-label-after-change"))
@@ -167,25 +154,10 @@ class K8sClientConfigMapLabelEventTriggeredIT extends K8sClientReloadBase {
 
 		replaceConfigMap(coreV1Api, rightWithLabelConfigMapAfterChange);
 
-		await().atMost(Duration.ofSeconds(60))
-			.pollDelay(Duration.ofSeconds(1))
-			.until(() -> output.getOut()
-				.contains("ConfigMap right-configmap-with-label was updated in namespace right"));
-
-		await().atMost(Duration.ofSeconds(60))
-			.pollInterval(Duration.ofSeconds(1))
-			.until(() -> rightWithLabelsProperties.getValue().equals("right-with-label-after-change"));
-	}
-
-	@TestConfiguration
-	static class TestConfig {
-
-		@Bean
-		@Primary
-		ApiClient client() {
-			return apiClient();
-		}
-
+		Awaitilities.awaitUntil(60, 1000,
+				() -> output.getOut().contains("ConfigMap right-configmap-with-label was updated in namespace right"));
+		Awaitilities.awaitUntil(60, 1000,
+				() -> rightWithLabelsProperties.getValue().equals("right-with-label-after-change"));
 	}
 
 }

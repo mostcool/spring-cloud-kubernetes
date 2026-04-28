@@ -18,7 +18,6 @@ package org.springframework.cloud.kubernetes.k8s.client.reload.it;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.time.Duration;
 
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
@@ -33,11 +32,9 @@ import org.testcontainers.k3s.K3sContainer;
 
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Commons;
+import org.springframework.cloud.kubernetes.integration.tests.commons.Awaitilities;
 import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
-import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.Util;
-
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import org.springframework.cloud.kubernetes.integration.tests.commons.native_client.NativeClientKubernetesFixture;
 
 /**
  * @author wind57
@@ -45,20 +42,15 @@ import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 @ExtendWith(OutputCaptureExtension.class)
 abstract class K8sClientReloadBase {
 
-	protected static final String NAMESPACE_RIGHT = "right";
-
-	protected static final K3sContainer K3S = Commons.container();
-
-	protected static Util util;
+	private static K3sContainer container;
 
 	@BeforeAll
-	protected static void beforeAll() {
-		K3S.start();
-		util = new Util(K3S);
+	protected static void beforeAll(K3sContainer k3sContainer) {
+		container = k3sContainer;
 	}
 
 	protected static ApiClient apiClient() {
-		String kubeConfigYaml = K3S.getKubeConfigYaml();
+		String kubeConfigYaml = container.getKubeConfigYaml();
 
 		ApiClient client;
 		try {
@@ -67,7 +59,7 @@ abstract class K8sClientReloadBase {
 		catch (IOException e) {
 			throw new RuntimeException(e);
 		}
-		return new CoreV1Api(client).getApiClient();
+		return client;
 	}
 
 	/**
@@ -75,7 +67,7 @@ abstract class K8sClientReloadBase {
 	 */
 	static void assertReloadLogStatements(String left, String right, CapturedOutput output) {
 
-		await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+		Awaitilities.awaitUntil(30, 1000, () -> {
 			boolean leftIsPresent = output.getOut().contains(left);
 			if (leftIsPresent) {
 				boolean rightIsPresent = output.getOut().contains(right);
@@ -96,36 +88,37 @@ abstract class K8sClientReloadBase {
 		}
 	}
 
-	protected static void manifests(Phase phase, Util util, String namespace, String imageName) {
+	protected static void manifests(Phase phase, NativeClientKubernetesFixture fixture, String namespace,
+			String imageName) {
 
-		V1Deployment deployment = (V1Deployment) util.yaml("mount/deployment.yaml");
-		V1Service service = (V1Service) util.yaml("mount/service.yaml");
-		V1ConfigMap configMap = (V1ConfigMap) util.yaml("mount/configmap.yaml");
+		V1Deployment deployment = fixture.yaml("mount/deployment.yaml", V1Deployment.class);
+		V1Service service = fixture.yaml("mount/service.yaml", V1Service.class);
+		V1ConfigMap configMap = fixture.yaml("mount/configmap.yaml", V1ConfigMap.class);
 
 		if (phase.equals(Phase.CREATE)) {
-			util.createAndWait(namespace, configMap, null);
-			util.createAndWait(namespace, imageName, deployment, service, true);
+			fixture.createAndWait(namespace, configMap, null);
+			fixture.createAndWait(namespace, imageName, deployment, service, true);
 		}
 		else {
-			util.deleteAndWait(namespace, configMap, null);
-			util.deleteAndWait(namespace, deployment, service);
+			fixture.deleteAndWait(namespace, configMap, null);
+			fixture.deleteAndWait(namespace, deployment, service);
 		}
 
 	}
 
-	protected static void manifestsSecret(Phase phase, Util util, String namespace, String imageName) {
+	protected static void manifestsSecret(Phase phase, NativeClientKubernetesFixture fixture) {
 
-		V1Secret secret = (V1Secret) util.yaml("mount/secret.yaml");
-		V1Deployment deployment = (V1Deployment) util.yaml("mount/deployment-with-secret.yaml");
-		V1Service service = (V1Service) util.yaml("mount/service-with-secret.yaml");
+		V1Secret secret = fixture.yaml("mount/secret.yaml", V1Secret.class);
+		V1Deployment deployment = fixture.yaml("mount/deployment-with-secret.yaml", V1Deployment.class);
+		V1Service service = fixture.yaml("mount/service-with-secret.yaml", V1Service.class);
 
 		if (phase.equals(Phase.CREATE)) {
-			util.createAndWait(namespace, null, secret);
-			util.createAndWait(namespace, imageName, deployment, service, true);
+			fixture.createAndWait("default", null, secret);
+			fixture.createAndWait("default", "spring-cloud-kubernetes-k8s-client-reload", deployment, service, true);
 		}
 		else {
-			util.deleteAndWait(namespace, null, secret);
-			util.deleteAndWait(namespace, deployment, service);
+			fixture.deleteAndWait("default", null, secret);
+			fixture.deleteAndWait("default", deployment, service);
 		}
 
 	}

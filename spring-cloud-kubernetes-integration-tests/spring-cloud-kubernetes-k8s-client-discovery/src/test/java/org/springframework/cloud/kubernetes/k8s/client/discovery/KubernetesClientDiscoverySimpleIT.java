@@ -21,26 +21,21 @@ import java.util.Map;
 import java.util.Set;
 
 import io.kubernetes.client.openapi.ApiClient;
-import io.kubernetes.client.openapi.models.V1Service;
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.k3s.K3sContainer;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.kubernetes.commons.discovery.DefaultKubernetesServiceInstance;
 import org.springframework.cloud.kubernetes.commons.discovery.ExternalNameKubernetesServiceInstance;
 import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Images;
-import org.springframework.cloud.kubernetes.integration.tests.commons.Phase;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.cloud.kubernetes.integration.tests.commons.k3s.NativeClientIntegrationTest;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.convention.TestBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.cloud.kubernetes.k8s.client.discovery.TestAssertions.assertLogStatement;
@@ -48,45 +43,34 @@ import static org.springframework.cloud.kubernetes.k8s.client.discovery.TestAsse
 /**
  * @author wind57
  */
-@SpringBootTest(classes = { DiscoveryApp.class, KubernetesClientDiscoverySimpleIT.TestConfig.class },
-		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = { DiscoveryApp.class }, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = { "spring.cloud.kubernetes.discovery.namespaces[0]=default",
 		"org.springframework.cloud.kubernetes.client.discovery=debug" })
+@NativeClientIntegrationTest(busyboxNamespaces = "default", deployExternalNameService = true)
 class KubernetesClientDiscoverySimpleIT extends KubernetesClientDiscoveryBase {
+
+	@TestBean
+	private ApiClient apiClient;
+
+	@TestBean
+	private KubernetesDiscoveryProperties kubernetesDiscoveryProperties;
 
 	@Autowired
 	private DiscoveryClient discoveryClient;
 
-	private static V1Service externalNameService;
-
-	@BeforeEach
-	void beforeEach() {
-		Images.loadBusybox(K3S);
-		util.busybox(NAMESPACE, Phase.CREATE);
-
-		externalNameService = (V1Service) util.yaml("external-name-service.yaml");
-		util.createAndWait(NAMESPACE, null, null, externalNameService, true);
-	}
-
-	@AfterEach
-	void afterEach() {
-		util.busybox(NAMESPACE, Phase.DELETE);
-		util.deleteAndWait(NAMESPACE, null, externalNameService);
-	}
-
 	@Test
-	void test(CapturedOutput output) throws Exception {
+	void test(CapturedOutput output, K3sContainer container) throws Exception {
 
 		// find both pods
-		String[] both = K3S.execInContainer("sh", "-c", "kubectl get pods -l app=busybox -o=name --no-headers")
+		String[] both = container.execInContainer("sh", "-c", "kubectl get pods -l app=busybox -o=name --no-headers")
 			.getStdout()
 			.split("\n");
 		// add a label to first pod
-		K3S.execInContainer("sh", "-c",
+		container.execInContainer("sh", "-c",
 				"kubectl label pods " + both[0].split("/")[1] + " custom-label=custom-label-value");
 
 		// add annotation to the second pod
-		K3S.execInContainer("sh", "-c",
+		container.execInContainer("sh", "-c",
 				"kubectl annotate pods " + both[1].split("/")[1] + " custom-annotation=custom-annotation-value");
 
 		assertLogStatement(output, "serviceSharedInformers will use selective namespaces : [default]");
@@ -154,21 +138,8 @@ class KubernetesClientDiscoverySimpleIT extends KubernetesClientDiscoveryBase {
 		assertThat(serviceInstances).isEmpty();
 	}
 
-	@TestConfiguration
-	static class TestConfig {
-
-		@Bean
-		@Primary
-		ApiClient client() {
-			return apiClient();
-		}
-
-		@Bean
-		@Primary
-		KubernetesDiscoveryProperties kubernetesDiscoveryProperties() {
-			return discoveryProperties(false, Set.of(NAMESPACE), null);
-		}
-
+	private static KubernetesDiscoveryProperties kubernetesDiscoveryProperties() {
+		return discoveryProperties(false, Set.of(DEFAULT_NAMESPACE), null, Map.of());
 	}
 
 }

@@ -47,6 +47,7 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.log.LogAccessor;
 
 import static org.springframework.cloud.kubernetes.client.KubernetesClientUtils.createApiClientForInformerClient;
+import static org.springframework.cloud.kubernetes.client.KubernetesClientUtils.labelSelector;
 import static org.springframework.cloud.kubernetes.client.config.KubernetesClientConfigUtils.namespaces;
 
 /**
@@ -72,6 +73,10 @@ public class KubernetesClientEventBasedSecretsChangeDetector extends Configurati
 	private final ConfigurableEnvironment environment;
 
 	private final boolean enableReloadFiltering;
+
+	private final boolean monitoringSecrets;
+
+	private final Map<String, String> secretsLabels;
 
 	private final ResourceEventHandler<V1Secret> handler = new ResourceEventHandler<>() {
 
@@ -113,6 +118,8 @@ public class KubernetesClientEventBasedSecretsChangeDetector extends Configurati
 		this.coreV1Api = coreV1Api;
 		this.apiClient = createApiClientForInformerClient();
 		this.enableReloadFiltering = properties.enableReloadFiltering();
+		this.monitoringSecrets = properties.monitoringSecrets();
+		this.secretsLabels = properties.secretsLabels();
 		namespaces = namespaces(kubernetesNamespaceProvider, properties, "secret");
 	}
 
@@ -120,28 +127,42 @@ public class KubernetesClientEventBasedSecretsChangeDetector extends Configurati
 	void inform() {
 		LOG.info(() -> "Kubernetes event-based secrets change detector activated");
 
-		namespaces.forEach(namespace -> {
-			SharedIndexInformer<V1Secret> informer;
-			String[] filter = new String[1];
+		Map<String, String> labelSelector;
 
-			if (enableReloadFiltering) {
-				filter[0] = ConfigReloadProperties.RELOAD_LABEL_FILTER + "=true";
+		if (enableReloadFiltering) {
+			LOG.warn(() -> "enable reload filtering is deprecated and will be removed in the next major release");
+			LOG.warn(() -> "use spring.cloud.kubernetes.reload.secrets-labels instead");
+			if (!secretsLabels.isEmpty()) {
+				LOG.warn(() -> "spring.cloud.kubernetes.reload.secrets-labels is not empty, but "
+						+ "spring.cloud.kubernetes.reload.enable-reload-filtering is enabled and will override the former");
 			}
-			SharedInformerFactory factory = new SharedInformerFactory(apiClient);
-			factories.add(factory);
-			informer = factory
-				.sharedIndexInformerFor((CallGeneratorParams params) -> coreV1Api.listNamespacedSecret(namespace)
-					.timeoutSeconds(params.timeoutSeconds)
-					.resourceVersion(params.resourceVersion)
-					.watch(params.watch)
-					.buildCall(null), V1Secret.class, V1SecretList.class);
+			labelSelector = Map.of(ConfigReloadProperties.RELOAD_LABEL_FILTER, "true");
+		}
+		else {
+			labelSelector = secretsLabels;
+		}
 
-			LOG.debug(() -> "added secret informer for namespace : " + namespace + " with filter : " + filter[0]);
+		if (monitoringSecrets) {
+			namespaces.forEach(namespace -> {
+				SharedIndexInformer<V1Secret> informer;
 
-			informer.addEventHandler(handler);
-			informers.add(informer);
-			factory.startAllRegisteredInformers();
-		});
+				SharedInformerFactory factory = new SharedInformerFactory(apiClient);
+				factories.add(factory);
+				informer = factory
+					.sharedIndexInformerFor((CallGeneratorParams params) -> coreV1Api.listNamespacedSecret(namespace)
+						.timeoutSeconds(params.timeoutSeconds)
+						.resourceVersion(params.resourceVersion)
+						.watch(params.watch)
+						.labelSelector(labelSelector(labelSelector))
+						.buildCall(null), V1Secret.class, V1SecretList.class);
+
+				LOG.debug(() -> "secret informer for namespace : " + namespace + " with filter : " + secretsLabels);
+
+				informer.addEventHandler(handler);
+				informers.add(informer);
+				factory.startAllRegisteredInformers();
+			});
+		}
 
 	}
 
