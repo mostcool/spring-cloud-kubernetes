@@ -26,6 +26,16 @@ on:
         required: false
         default: 'false'
         type: string
+      runs-on:
+        description: "Runner label for the jobs that run Maven"
+        required: false
+        default: 'ubuntu-latest'
+        type: string
+      build-docs:
+        description: "Whether the deploy build includes the docs profile"
+        required: false
+        default: true
+        type: boolean
   # Allow calls from ci.yaml
   workflow_call:
     inputs:
@@ -41,11 +51,27 @@ on:
         description: "Whether to run deployment after tests pass"
         required: true
         type: boolean
+      runs-on:
+        description: >
+          Runner label for the jobs that run Maven. Defaults to ubuntu-latest, which is
+          correct for open source builds. Commercial branches must pass a runner from the
+          spring-enterprise-builds group, because commercial Artifactory only accepts
+          requests from those runners and answers anything else with a 403 no matter what
+          credentials are supplied. Also used for the deploy job.
+        required: false
+        default: 'ubuntu-latest'
+        type: string
+      build-docs:
+        description: >
+          Whether the deploy build includes the docs profile.
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   build:
     name: Build (${{ inputs.branch || github.ref_name }} with JDK ${{ inputs.jdk-version || '17' }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     env:
       # this might get set to true if there is an existing cache of test times
       # this happens in 'matrix-bounds-on-test-times-cache-hit'
@@ -67,7 +93,7 @@ jobs:
     steps:
 
       - name: checkout project
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.branch || github.ref }}
 
@@ -80,13 +106,21 @@ jobs:
           echo "branch_safe=${SANITIZED_BRANCH}" >> $GITHUB_OUTPUT
 
       - name: set env variables
+        env:
+          # Read-write commercial credentials, deliberately blank on pull requests so that
+          # forked PRs fall back to the read-only secrets. The composite picks whichever
+          # pair is populated and exports COMMERCIAL_ARTIFACTORY_USERNAME/PASSWORD, which
+          # release-ci-settings.xml interpolates to reach commercial Artifactory.
+          PASSWORD: ${{ github.event_name != 'pull_request' && secrets.COMMERCIAL_ARTIFACTORY_PASSWORD || '' }}
+          USERNAME: ${{ github.event_name != 'pull_request' && secrets.COMMERCIAL_ARTIFACTORY_USERNAME || '' }}
+          RO_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD || secrets.ARTIFACTORY_RO_PASSWORD }}
+          RO_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME || secrets.ARTIFACTORY_RO_USERNAME }}
         uses: ./.github/workflows/composites/env-variables
 
       - name: setup project jdk
         uses: ./.github/workflows/composites/setup-jdk
         with:
           jdk-version: ${{ env.JDK_VERSION }}
-        if: env.BASE_BRANCH == 'main' || env.BASE_BRANCH == '3.0.x' || env.BASE_BRANCH == '3.1.x'
 
       - name: cache local maven repository
         uses: ./.github/workflows/composites/cache
@@ -111,7 +145,7 @@ jobs:
 
       - name: restore test times cache if it exists
         id: restore_test_times_cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: /tmp/sorted.txt
           key: ${{ runner.os }}-spring-cloud-k8s-jdk${{ env.JDK_VERSION }}-test-times-cache-${{ github.run_id }}
@@ -146,7 +180,7 @@ jobs:
   test_when_cache_present:
     name: Test with cache (runner ${{ matrix.current_index }})
     needs: [ build ]
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 30
       JDK_VERSION: ${{ inputs.jdk-version || '17' }}
@@ -166,7 +200,7 @@ jobs:
     steps:
 
       - name: checkout project
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.branch || github.ref }}
 
@@ -174,13 +208,21 @@ jobs:
         uses: ./.github/workflows/composites/clean-space
 
       - name: set env variables
+        env:
+          # Read-write commercial credentials, deliberately blank on pull requests so that
+          # forked PRs fall back to the read-only secrets. The composite picks whichever
+          # pair is populated and exports COMMERCIAL_ARTIFACTORY_USERNAME/PASSWORD, which
+          # release-ci-settings.xml interpolates to reach commercial Artifactory.
+          PASSWORD: ${{ github.event_name != 'pull_request' && secrets.COMMERCIAL_ARTIFACTORY_PASSWORD || '' }}
+          USERNAME: ${{ github.event_name != 'pull_request' && secrets.COMMERCIAL_ARTIFACTORY_USERNAME || '' }}
+          RO_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD || secrets.ARTIFACTORY_RO_PASSWORD }}
+          RO_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME || secrets.ARTIFACTORY_RO_USERNAME }}
         uses: ./.github/workflows/composites/env-variables
 
       - name: setup project jdk
         uses: ./.github/workflows/composites/setup-jdk
         with:
           jdk-version: ${{ env.JDK_VERSION }}
-        if: env.BASE_BRANCH == 'main' || env.BASE_BRANCH == '3.0.x' || env.BASE_BRANCH == '3.1.x'
 
       - name: pre-test-actions
         uses: ./.github/workflows/composites/pre-test-actions
@@ -205,7 +247,7 @@ jobs:
   test_when_cache_missing:
     name: Test without cache (runner ${{ matrix.current_index }})
     needs: [ build ]
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 30
       JDK_VERSION: ${{ inputs.jdk-version || '17' }}
@@ -224,7 +266,7 @@ jobs:
     steps:
 
       - name: checkout project
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.branch || github.ref }}
 
@@ -232,13 +274,21 @@ jobs:
         uses: ./.github/workflows/composites/clean-space
 
       - name: set env variables
+        env:
+          # Read-write commercial credentials, deliberately blank on pull requests so that
+          # forked PRs fall back to the read-only secrets. The composite picks whichever
+          # pair is populated and exports COMMERCIAL_ARTIFACTORY_USERNAME/PASSWORD, which
+          # release-ci-settings.xml interpolates to reach commercial Artifactory.
+          PASSWORD: ${{ github.event_name != 'pull_request' && secrets.COMMERCIAL_ARTIFACTORY_PASSWORD || '' }}
+          USERNAME: ${{ github.event_name != 'pull_request' && secrets.COMMERCIAL_ARTIFACTORY_USERNAME || '' }}
+          RO_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD || secrets.ARTIFACTORY_RO_PASSWORD }}
+          RO_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME || secrets.ARTIFACTORY_RO_USERNAME }}
         uses: ./.github/workflows/composites/env-variables
 
       - name: setup project jdk
         uses: ./.github/workflows/composites/setup-jdk
         with:
           jdk-version: ${{ env.JDK_VERSION }}
-        if: env.BASE_BRANCH == 'main' || env.BASE_BRANCH == '3.0.x' || env.BASE_BRANCH == '3.1.x'
 
       - name: pre-test-actions
         uses: ./.github/workflows/composites/pre-test-actions
@@ -276,7 +326,7 @@ jobs:
     steps:
 
       - name: checkout project
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.branch || github.ref }}
 
@@ -298,7 +348,7 @@ jobs:
     steps:
 
       - name: checkout project
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.branch || github.ref }}
 
@@ -318,12 +368,16 @@ jobs:
     steps:
       - name: Check test results
         run: |
+          echo "test_when_cache_present: ${{ needs.test_when_cache_present.result }}"
+          echo "test_when_cache_missing: ${{ needs.test_when_cache_missing.result }}"
           if [ "${{ needs.test_when_cache_present.result }}" == "success" ] || \
              [ "${{ needs.test_when_cache_missing.result }}" == "success" ]; then
             echo "Tests passed"
             exit 0
           else
-            echo "Tests failed"
+            echo "No test job succeeded (see the results above). A result of 'cancelled'"
+            echo "means a test job timed out or was cancelled, not that a test assertion"
+            echo "failed - check the test job logs to tell them apart."
             exit 1
           fi
 
@@ -336,9 +390,13 @@ jobs:
     with:
       trigger_ci_on_non_default_branches: false
       branches: ${{ inputs.branch }}
+      # Commercial branches must deploy from a spring-enterprise-builds runner, the same as
+      # the jobs above; commercial Artifactory rejects anything else with a 403.
+      runs_on: ${{ inputs.runs-on }}
+      # MAVEN_SETTINGS and MAVEN_DEPLOY_FLAGS are set by deploy.yml. 
       custom_build_command: |
         if [[ "$SHOULD_DEPLOY" == "true" ]]; then
-          ./mvnw clean deploy -Pspring,docs -DskipTests -DskipITs -Dspring-boot.build-image.skip=true -B -U
+          ./mvnw $MAVEN_SETTINGS clean deploy -Pspring${{ inputs.build-docs && ',docs' || '' }} -DskipTests -DskipITs -Dspring-boot.build-image.skip=true -B -U $MAVEN_DEPLOY_FLAGS
         else
           echo "Will not deploy artifacts"
         fi

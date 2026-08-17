@@ -17,68 +17,38 @@
 package org.springframework.cloud.kubernetes.configuration.watcher;
 
 import java.util.Map;
-import java.util.Set;
 
+import io.kubernetes.client.openapi.models.V1ConfigMap;
+import io.kubernetes.client.openapi.models.V1ConfigMapBuilder;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
-import io.kubernetes.client.openapi.models.V1Secret;
-import io.kubernetes.client.openapi.models.V1SecretBuilder;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class WatcherUtilTests {
 
 	@Test
-	void labelsMissing() {
-		V1Secret secret = new V1SecretBuilder().withMetadata(new V1ObjectMeta()).build();
-		Map<String, String> res = WatcherUtil.labels(secret);
-		Assertions.assertThat(res).isEmpty();
+	void configMapWithRequiredLabelIsAccepted() {
+		V1ConfigMap configMap = configMap(Map.of(ConfigurationWatcherConfigurationProperties.CONFIG_MAP_LABEL, "true"));
+
+		boolean accepted = WatcherUtil.isSpringCloudKubernetes(configMap,
+				ConfigurationWatcherConfigurationProperties.CONFIG_MAP_LABEL);
+
+		assertThat(accepted).isTrue();
 	}
 
 	@Test
-	void labelsPresent() {
-		V1Secret secret = new V1SecretBuilder().withMetadata(new V1ObjectMeta().labels(Map.of("a", "b"))).build();
-		Map<String, String> res = WatcherUtil.labels(secret);
-		Assertions.assertThat(res.size()).isEqualTo(1);
+	void configMapWithoutRequiredLabelIsRejected() {
+		V1ConfigMap configMap = configMap(Map.of());
+
+		boolean accepted = WatcherUtil.isSpringCloudKubernetes(configMap,
+				ConfigurationWatcherConfigurationProperties.CONFIG_MAP_LABEL);
+
+		assertThat(accepted).isFalse();
 	}
 
-	@Test
-	void appsNoMetadata() {
-		V1Secret secret = new V1SecretBuilder().build();
-		Set<String> apps = WatcherUtil.apps(secret, "spring.cloud.kubernetes.secret.apps");
-		Assertions.assertThat(apps).isEmpty();
-	}
-
-	@Test
-	void appsNoAnnotations() {
-		V1Secret secret = new V1SecretBuilder().withMetadata(new V1ObjectMeta().annotations(Map.of())).build();
-		Set<String> apps = WatcherUtil.apps(secret, "spring.cloud.kubernetes.secret.apps");
-		Assertions.assertThat(apps).isEmpty();
-	}
-
-	@Test
-	void appsAnnotationNotFound() {
-		V1Secret secret = new V1SecretBuilder().withMetadata(new V1ObjectMeta().annotations(Map.of("a", "b"))).build();
-		Set<String> apps = WatcherUtil.apps(secret, "spring.cloud.kubernetes.secret.apps");
-		Assertions.assertThat(apps).isEmpty();
-	}
-
-	@Test
-	void appsSingleResult() {
-		V1Secret secret = new V1SecretBuilder()
-			.withMetadata(new V1ObjectMeta().annotations(Map.of("spring.cloud.kubernetes.secret.apps", "one-app")))
-			.build();
-		Set<String> apps = WatcherUtil.apps(secret, "spring.cloud.kubernetes.secret.apps");
-		Assertions.assertThat(apps).containsExactlyInAnyOrder("one-app");
-	}
-
-	@Test
-	void appsMultipleResults() {
-		V1Secret secret = new V1SecretBuilder()
-			.withMetadata(
-					new V1ObjectMeta().annotations(Map.of("spring.cloud.kubernetes.secret.apps", "one, two,  three ")))
-			.build();
-		Set<String> apps = WatcherUtil.apps(secret, "spring.cloud.kubernetes.secret.apps");
-		Assertions.assertThat(apps).containsExactlyInAnyOrder("one", "two", "three");
+	private static V1ConfigMap configMap(Map<String, String> labels) {
+		return new V1ConfigMapBuilder().withMetadata(new V1ObjectMeta().name("my-configmap").labels(labels)).build();
 	}
 
 }

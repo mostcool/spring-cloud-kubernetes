@@ -19,11 +19,9 @@ package org.springframework.cloud.kubernetes.client.config.reload;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 import io.kubernetes.client.common.KubernetesObject;
-import io.kubernetes.client.informer.ResourceEventHandler;
 import io.kubernetes.client.informer.SharedIndexInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.openapi.ApiClient;
@@ -77,34 +75,7 @@ public class KubernetesClientEventBasedConfigMapChangeDetector extends Configura
 
 	private final Map<String, String> configMapsLabels;
 
-	private final ResourceEventHandler<V1ConfigMap> handler = new ResourceEventHandler<>() {
-
-		@Override
-		public void onAdd(V1ConfigMap configMap) {
-			LOG.debug(() -> "ConfigMap " + configMap.getMetadata().getName() + " was added in namespace "
-					+ configMap.getMetadata().getNamespace());
-			onEvent(configMap);
-		}
-
-		@Override
-		public void onUpdate(V1ConfigMap oldConfigMap, V1ConfigMap newConfigMap) {
-			LOG.debug(() -> "ConfigMap " + newConfigMap.getMetadata().getName() + " was updated in namespace "
-					+ newConfigMap.getMetadata().getNamespace());
-			if (Objects.equals(oldConfigMap.getData(), newConfigMap.getData())) {
-				LOG.debug(() -> "data in configmap has not changed, will not reload");
-			}
-			else {
-				onEvent(newConfigMap);
-			}
-		}
-
-		@Override
-		public void onDelete(V1ConfigMap configMap, boolean deletedFinalStateUnknown) {
-			LOG.debug(() -> "ConfigMap " + configMap.getMetadata().getName() + " was deleted in namespace "
-					+ configMap.getMetadata().getNamespace());
-			onEvent(configMap);
-		}
-	};
+	private final ConfigMapResourceEventHandler handler = new ConfigMapResourceEventHandler(this::onEvent);
 
 	public KubernetesClientEventBasedConfigMapChangeDetector(CoreV1Api coreV1Api, ConfigurableEnvironment environment,
 			ConfigReloadProperties properties, ConfigurationUpdateStrategy strategy,

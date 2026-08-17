@@ -8,10 +8,10 @@ runs:
       run: |
         
         cd spring-cloud-kubernetes-test-support
-        .././mvnw clean install -U
+        .././mvnw $MAVEN_SETTINGS clean install -U
         cd ..
         
         cd spring-cloud-kubernetes-integration-tests
         # build the images, but dont run the tests
-        .././mvnw -T 1C clean install -DskipTests
+        .././mvnw $MAVEN_SETTINGS -T 1C clean install -DskipTests
         cd ..

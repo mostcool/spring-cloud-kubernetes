@@ -24,7 +24,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import io.kubernetes.client.common.KubernetesObject;
-import io.kubernetes.client.informer.ResourceEventHandler;
 import io.kubernetes.client.informer.SharedIndexInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.openapi.ApiClient;
@@ -78,35 +77,7 @@ public class KubernetesClientEventBasedSecretsChangeDetector extends Configurati
 
 	private final Map<String, String> secretsLabels;
 
-	private final ResourceEventHandler<V1Secret> handler = new ResourceEventHandler<>() {
-
-		@Override
-		public void onAdd(V1Secret secret) {
-			LOG.debug(() -> "Secret " + secret.getMetadata().getName() + " was added in namespace "
-					+ secret.getMetadata().getNamespace());
-			onEvent(secret);
-		}
-
-		@Override
-		public void onUpdate(V1Secret oldSecret, V1Secret newSecret) {
-			LOG.debug(() -> "Secret " + newSecret.getMetadata().getName() + " was updated in namespace "
-					+ newSecret.getMetadata().getNamespace());
-
-			if (KubernetesClientEventBasedSecretsChangeDetector.equals(oldSecret.getData(), newSecret.getData())) {
-				LOG.debug(() -> "data in secret has not changed, will not reload");
-			}
-			else {
-				onEvent(newSecret);
-			}
-		}
-
-		@Override
-		public void onDelete(V1Secret secret, boolean deletedFinalStateUnknown) {
-			LOG.debug(() -> "Secret " + secret.getMetadata().getName() + " was deleted in namespace "
-					+ secret.getMetadata().getNamespace());
-			onEvent(secret);
-		}
-	};
+	private final SecretResourceEventHandler handler = new SecretResourceEventHandler(LOG, this::onEvent);
 
 	public KubernetesClientEventBasedSecretsChangeDetector(CoreV1Api coreV1Api, ConfigurableEnvironment environment,
 			ConfigReloadProperties properties, ConfigurationUpdateStrategy strategy,

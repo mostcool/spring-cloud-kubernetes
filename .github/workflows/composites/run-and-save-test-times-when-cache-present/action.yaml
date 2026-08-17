@@ -154,7 +154,7 @@ runs:
         
         echo "will run tests : $tests_to_run_in_current_index"
         
-        ./mvnw -s .settings.xml \
+        ./mvnw $MAVEN_SETTINGS \
               -DtestsToRun=${tests_to_run_in_current_index} \
               -Dsurefire-reports-directory=surefire-reports/${CURRENT_INDEX} \
               -Dfailsafe-reports-directory=failsafe-reports/${CURRENT_INDEX} \

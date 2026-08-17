@@ -46,7 +46,7 @@ runs:
         TEST_ARG=$(echo ${sliced_array[@]} | sed 's/ /,/g')
         echo "$TEST_ARG"
         
-        ./mvnw -s .settings.xml \
+        ./mvnw $MAVEN_SETTINGS \
             -DtestsToRun=${TEST_ARG[@]} \
             -DCURRENT_INSTANCE=${CURRENT_INDEX} \
             -e clean install \

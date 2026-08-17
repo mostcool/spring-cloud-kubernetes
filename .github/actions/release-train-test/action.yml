@@ -1,0 +1,12 @@
+name: Test Release
+runs:
+  using: composite
+  steps:
+    - name: Configure Testcontainers
+      shell: bash
+      run: |-
+        if [ -f ~/.testcontainers.properties ]; then rm ~/.testcontainers.properties; fi
+        echo 'testcontainers.reuse.enable=true' > ~/.testcontainers.properties
+    - name: Test Release
+      shell: bash
+      run: ./mvnw --batch-mode --settings release-train-settings.xml clean verify --activate-profiles releaseTrain -Dspring-boot.build-image.skip=true -DskipITs

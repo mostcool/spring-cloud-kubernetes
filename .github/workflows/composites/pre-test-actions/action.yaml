@@ -37,7 +37,7 @@ runs:
     - name: build project
       shell: bash
       run: |
-        ./mvnw clean install -Dspring-boot.build-image.skip=true -DskipITs -DskipTests -T1C -U -B -q  
+        ./mvnw $MAVEN_SETTINGS clean install -Dspring-boot.build-image.skip=true -DskipITs -DskipTests -T1C -U -B -q
 
     # we could cache these images also, but the vast majority of time, we will
     # be running against a SNAPSHOT version.
@@ -54,7 +54,7 @@ runs:
       run: |
         
         # find the version of our project from file: spring-cloud-kubernetes-integration-tests/pom.xml
-        PROJECT_VERSION="$(./mvnw -q -f spring-cloud-kubernetes-integration-tests/pom.xml help:evaluate -Dexpression=project.version -DforceStdout)"
+        PROJECT_VERSION="$(./mvnw $MAVEN_SETTINGS -q -f spring-cloud-kubernetes-integration-tests/pom.xml help:evaluate -Dexpression=project.version -DforceStdout)"
         
         # get the existing docker images ( controllers and integration tests ) into the 'images' array
         mapfile -t images < <(
